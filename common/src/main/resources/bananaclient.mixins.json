@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "net.bananacheese.bananaclient.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": [
+    "OptionInstanceAccessor",
+    "MixinKeyboardHandler"
+  ],
+  "mixins": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
