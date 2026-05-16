@@ -6,18 +6,17 @@ public class PanelState {
     public int     y;
     public boolean visible;
     public boolean collapsed;
+    public boolean locked;      // ← new
 
     public PanelState(int x, int y) {
         this.x         = x;
         this.y         = y;
         this.visible   = true;
         this.collapsed = false;
+        this.locked    = false;
     }
 
-    // Default constructor needed for Gson deserialization
-    public PanelState() {
-        this(20, 20);
-    }
+    public PanelState() { this(20, 20); }
 
     public PanelState copy() {
         PanelState s = new PanelState();
@@ -25,6 +24,7 @@ public class PanelState {
         s.y         = this.y;
         s.visible   = this.visible;
         s.collapsed = this.collapsed;
+        s.locked    = this.locked;
         return s;
     }
 }
