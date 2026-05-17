@@ -1,7 +1,7 @@
 package net.bananacheese.bananaclient.modules;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
-import net.bananacheese.bananaclient.modules.combat.ReachDisplay;
+import net.bananacheese.bananaclient.modules.player.Reach;
 import net.bananacheese.bananaclient.modules.render.Fullbright;
 import net.bananacheese.bananaclient.modules.movement.NoFall;
 import net.bananacheese.bananaclient.modules.render.Coordinates;
@@ -18,8 +18,10 @@ public class ModuleManager {
         if (initialized) return;
         initialized = true;
 
-        // Combat
-        register(new ReachDisplay());
+        //Combat
+
+        //Player
+        register(new Reach());
 
         // Movement
         register(new NoFall());

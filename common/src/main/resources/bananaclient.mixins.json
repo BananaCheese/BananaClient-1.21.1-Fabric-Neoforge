@@ -6,7 +6,9 @@
   "client": [
     "OptionInstanceAccessor",
     "MixinKeyboardHandler",
-    "MixinLivingEntity"
+    "MixinLivingEntity",
+    "MixinLocalPlayer",
+    "MixinConnection"
   ],
   "mixins": [
   ],
