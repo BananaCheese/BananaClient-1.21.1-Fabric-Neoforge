@@ -34,6 +34,7 @@ public class ThemeEditorPanel {
     // Color editing state
     private int    editingColorField = -1; // index into COLOR_FIELDS
     private final StringBuilder hexInput = new StringBuilder();
+    private ColorPickerPanel colorPicker = null;
 
     // Scroll for colors tab
     private int scrollOffset = 0;
@@ -164,6 +165,11 @@ public class ThemeEditorPanel {
             case 1 -> renderColorsTab(gfx, font, contentY, mouseX, mouseY, t);
             case 2 -> renderStyleTab(gfx, font, contentY, mouseX, mouseY, t);
         }
+
+        // Color picker renders last — on top of everything
+        if (colorPicker != null) {
+            colorPicker.render(gfx, font, mouseX, mouseY);
+        }
     }
 
     private void renderPresetsTab(GuiGraphics gfx, Font font,
@@ -222,15 +228,6 @@ public class ThemeEditorPanel {
             gfx.fill(swatchX, swatchY, swatchX + swatchW, swatchY + 8, colorVal);
             gfx.renderOutline(swatchX, swatchY, swatchW, 8,
                     isEditing ? t.accentColor : t.borderColor);
-        }
-
-        // Hex input field shown below the list when editing
-        if (editingColorField >= 0) {
-            int inputY = contentY + Math.min(COLOR_LABELS.length, MAX_ROWS) * ROW_H + 2;
-            gfx.fill(x + PAD, inputY, x + WIDTH - PAD, inputY + 16, 0xFF000000);
-            gfx.renderOutline(x + PAD, inputY, WIDTH - PAD * 2, 16, t.accentColor);
-            String display = "#" + hexInput + (((System.currentTimeMillis() / 500) % 2 == 0) ? "|" : "");
-            gfx.drawString(font, display, x + PAD + 3, inputY + 4, t.enabledTextColor, false);
         }
 
         // Scroll indicator
@@ -292,6 +289,19 @@ public class ThemeEditorPanel {
     public boolean mouseClicked(double mx, double my, int button) {
         if (!isInPanel(mx, my)) return false;
 
+        // Color picker gets priority
+        if (colorPicker != null) {
+            if (colorPicker.isCloseClick(mx, my)) {
+                colorPicker = null;
+                editingColorField = -1;
+                return true;
+            }
+            if (colorPicker.isInPanel(mx, my)) {
+                colorPicker.mouseClicked(mx, my, button);
+                return true;
+            }
+        }
+
         // Header drag
         if (my >= y && my <= y + HEADER_H) {
             if (button == 0) {
@@ -341,12 +351,9 @@ public class ThemeEditorPanel {
     }
 
     private void handleColorsClick(double mx, double my, int contentY) {
-        // If clicking while hex input is active, try to commit
-        if (editingColorField >= 0) {
-            int inputY = contentY + Math.min(COLOR_LABELS.length, MAX_ROWS) * ROW_H + 2;
-            if (my >= inputY && my <= inputY + 16) return; // click in input field, ignore
-            // Click elsewhere — commit if valid
-            commitHexInput();
+        // Close picker if clicking outside it
+        if (colorPicker != null && !colorPicker.isInPanel(mx, my)) {
+            colorPicker = null;
         }
 
         int startIdx = Math.max(0, Math.min(scrollOffset, COLOR_LABELS.length - MAX_ROWS));
@@ -354,18 +361,43 @@ public class ThemeEditorPanel {
             int fieldIdx = startIdx + i;
             int rowY = contentY + i * ROW_H;
             if (my >= rowY && my <= rowY + ROW_H) {
-                if (editingColorField == fieldIdx) {
-                    // Already editing this one — commit
-                    commitHexInput();
+                int finalFieldIdx = fieldIdx;
+                // Toggle picker — close if same field, open if different
+                if (colorPicker != null && editingColorField == fieldIdx) {
+                    colorPicker = null;
+                    editingColorField = -1;
                 } else {
-                    // Start editing
                     editingColorField = fieldIdx;
-                    hexInput.setLength(0);
-                    hexInput.append(toHex(getColor(ThemeManager.get(), fieldIdx)));
+                    // Open picker to the right of the theme panel
+                    colorPicker = new ColorPickerPanel(
+                            x + WIDTH + 4,
+                            y + HEADER_H + TAB_H + i * ROW_H,
+                            COLOR_LABELS[fieldIdx],
+                            () -> getColor(ThemeManager.get(), finalFieldIdx),
+                            color -> {
+                                setColor(ThemeManager.get(), finalFieldIdx, color);
+                            }
+                    );
                 }
                 return;
             }
         }
+    }
+
+    // Returns true if the color picker is open and the point is inside it
+    public boolean isColorPickerInPanel(double mx, double my) {
+        return colorPicker != null && colorPicker.isInPanel(mx, my);
+    }
+
+    // Delegates a click to the color picker directly
+    public void colorPickerMouseClicked(double mx, double my, int button) {
+        if (colorPicker == null) return;
+        if (colorPicker.isCloseClick(mx, my)) {
+            colorPicker = null;
+            editingColorField = -1;
+            return;
+        }
+        colorPicker.mouseClicked(mx, my, button);
     }
 
     private void handleStyleClick(double mx, double my, int contentY) {
@@ -412,6 +444,7 @@ public class ThemeEditorPanel {
     }
 
     public boolean mouseDragged(double mx, double my) {
+        if (colorPicker != null && colorPicker.mouseDragged(mx, my)) return true;
         if (dragging) {
             // Panel drag
             x = (int) mx - dragOffsetX;
@@ -426,6 +459,7 @@ public class ThemeEditorPanel {
     }
 
     public void mouseReleased() {
+        if (colorPicker != null) colorPicker.mouseReleased();
         sliderDragging = false;
         // Note: panel drag stopDrag() already exists separately
     }
@@ -441,6 +475,7 @@ public class ThemeEditorPanel {
     }
 
     public boolean keyPressed(int keyCode) {
+        if (colorPicker != null && colorPicker.keyPressed(keyCode)) return true;
         if (editingColorField < 0) return false;
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
             commitHexInput();
@@ -459,6 +494,7 @@ public class ThemeEditorPanel {
     }
 
     public void charTyped(char c) {
+        if (colorPicker != null) { colorPicker.charTyped(c); return; }
         if (editingColorField < 0) return;
         // Only allow hex characters, max 8 chars (AARRGGBB)
         if (hexInput.length() < 8 && "0123456789AaBbCcDdEeFf".indexOf(c) >= 0) {

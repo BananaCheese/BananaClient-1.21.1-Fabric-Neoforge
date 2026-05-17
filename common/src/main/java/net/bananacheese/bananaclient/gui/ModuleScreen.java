@@ -275,8 +275,17 @@ public class ModuleScreen extends Screen {
             }
             visibilityPanel = null;
         }
-        if (themeEditor != null && themeEditor.isInPanel(mx, my)) {
-            themeEditor.mouseClicked(mx, my, button); return true;
+        // After:
+        if (themeEditor != null) {
+            // Color picker renders outside the theme panel bounds — check it first
+            if (themeEditor.isColorPickerInPanel(mx, my)) {
+                themeEditor.colorPickerMouseClicked(mx, my, button);
+                return true;
+            }
+            if (themeEditor.isInPanel(mx, my)) {
+                themeEditor.mouseClicked(mx, my, button);
+                return true;
+            }
         }
 
         // Profile panel
@@ -400,7 +409,10 @@ public class ModuleScreen extends Screen {
         if (visibilityPanel != null && visibilityPanel.isDragging()) {
             visibilityPanel.drag(mx, my); return true;
         }
-        if (themeEditor != null && themeEditor.mouseDragged(mx, my)) return true;
+        // After:
+        if (themeEditor != null) {
+            if (themeEditor.mouseDragged(mx, my)) return true;
+        }
         for (CategoryPanel p : categoryPanels) {
             if (p.isDragging()) { p.drag(mx, my); return true; }
         }
@@ -418,8 +430,11 @@ public class ModuleScreen extends Screen {
             ProfileManager.saveActive();
         }
         if (visibilityPanel != null) visibilityPanel.stopDrag();
-        if (themeEditor != null)     themeEditor.stopDrag();
-        if (themeEditor != null) themeEditor.mouseReleased();
+        // After — just one call, mouseReleased handles both:
+        if (themeEditor != null) {
+            themeEditor.stopDrag();
+            themeEditor.mouseReleased();
+        }
         for (CategoryPanel p : categoryPanels) p.stopDrag();
         return super.mouseReleased(mx, my, button);
     }
