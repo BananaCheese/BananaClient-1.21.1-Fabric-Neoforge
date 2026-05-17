@@ -2,6 +2,7 @@ package net.bananacheese.bananaclient.gui;
 
 import net.bananacheese.bananaclient.gui.theme.Theme;
 import net.bananacheese.bananaclient.gui.theme.ThemeManager;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
@@ -69,8 +70,9 @@ public class ContextMenu {
         Theme t = ThemeManager.get();
         int h = totalHeight();
 
-        gfx.fill(x, y, x + WIDTH, y + h, t.backgroundColor);
-        gfx.renderOutline(x, y, WIDTH, h, t.borderColor);
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
+        gfx.fill(x, y, x + WIDTH, y + ROW_H, bgColor);
+        gfx.renderOutline(x, y, WIDTH, ROW_H, t.borderColor);
 
         int curY = y;
         for (Entry e : entries) {

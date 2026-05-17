@@ -11,21 +11,28 @@ import java.util.Map;
 public class Profile {
 
     public String name;
-    public Theme theme;
+    public Theme  theme;
 
     // Keyed by Category.name() — e.g. "RENDER", "MOVEMENT"
     public Map<String, PanelState> panelStates = new HashMap<>();
 
-    // Module names that are hidden from the regular panel view
+    // Profile panel's own position — stored separately from category panels
+    public PanelState profilePanelState = new PanelState(5, 5);
+
+    // Module names hidden from regular panel view
     public List<String> hiddenModules = new ArrayList<>();
+
+    // Keybinds — module name → GLFW key code
+    public Map<String, Integer> keybinds = new HashMap<>();
 
     public Profile(String name, Theme theme) {
         this.name  = name;
         this.theme = theme;
     }
 
-    // Default constructor needed for Gson
     public Profile() {}
+
+    // ── Category panel states ──────────────────────────────────────────────
 
     public PanelState getPanelState(Module.Category category) {
         return panelStates.computeIfAbsent(
@@ -38,35 +45,48 @@ public class Profile {
         panelStates.put(category.name(), state);
     }
 
+    // ── Module visibility ──────────────────────────────────────────────────
+
     public boolean isModuleHidden(String moduleName) {
         return hiddenModules.contains(moduleName);
     }
 
     public void setModuleHidden(String moduleName, boolean hidden) {
         if (hidden) {
-            if (!hiddenModules.contains(moduleName))
-                hiddenModules.add(moduleName);
+            if (!hiddenModules.contains(moduleName)) hiddenModules.add(moduleName);
         } else {
             hiddenModules.remove(moduleName);
         }
     }
+
+    // ── Keybinds ───────────────────────────────────────────────────────────
+
+    public int getKeybind(String moduleName, int defaultKey) {
+        return keybinds.getOrDefault(moduleName, defaultKey);
+    }
+
+    public void setKeybind(String moduleName, int keyCode) {
+        keybinds.put(moduleName, keyCode);
+    }
+
+    // ── Copy ───────────────────────────────────────────────────────────────
 
     public Profile copy(String newName) {
         Profile p = new Profile();
         p.name  = newName;
         p.theme = this.theme.copy();
         p.theme.name = this.theme.name;
-        for (var entry : panelStates.entrySet()) {
+        p.profilePanelState = this.profilePanelState.copy();
+        for (var entry : panelStates.entrySet())
             p.panelStates.put(entry.getKey(), entry.getValue().copy());
-        }
         p.hiddenModules = new ArrayList<>(this.hiddenModules);
+        p.keybinds = new HashMap<>(this.keybinds);
         return p;
     }
 
-    // Sensible default positions so panels don't all stack on top of each other
     private static PanelState defaultStateFor(Module.Category category) {
         return switch (category) {
-            case COMBAT   -> new PanelState(150,  5);
+            case COMBAT   -> new PanelState(150, 5);
             case MOVEMENT -> new PanelState(275, 5);
             case RENDER   -> new PanelState(400, 5);
             case MISC     -> new PanelState(525, 5);

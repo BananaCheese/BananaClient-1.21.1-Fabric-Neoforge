@@ -1,10 +1,14 @@
 package net.bananacheese.bananaclient.gui;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.bananacheese.bananaclient.gui.profile.PanelState;
+import net.bananacheese.bananaclient.gui.profile.Profile;
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
+import net.bananacheese.bananaclient.gui.theme.Theme;
 import net.bananacheese.bananaclient.gui.theme.ThemeEditorPanel;
 import net.bananacheese.bananaclient.gui.theme.ThemeManager;
 import net.bananacheese.bananaclient.modules.Module;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -15,14 +19,28 @@ import java.util.List;
 
 public class ModuleScreen extends Screen {
 
+    // ── Constants ─────────────────────────────────────────────────────────
+    private static final int PP_WIDTH    = 140;
+    private static final int PP_HEADER_H = 18;
+    private static final int PP_ROW_H    = 16;
+    private static final int PP_FOOTER_H = 18;
+    private static final int PP_PAD      = 6;
+
+    // ── Panels ────────────────────────────────────────────────────────────
     private final List<CategoryPanel> categoryPanels = new ArrayList<>();
 
-    private ProfilePanel          profilePanel;
-    private ModuleVisibilityPanel visibilityPanel   = null;
-    private ModuleSettingsPanel   settingsPanel     = null;
-    private ContextMenu           contextMenu       = null;
-    private RenameDialog          renameDialog      = null;
-    private ThemeEditorPanel      themeEditor       = null;
+    // Profile panel drag state — position lives in ProfileManager.getActive().profilePanelState
+    private boolean ppDragging = false;
+    private int     ppDragOffX, ppDragOffY;
+    private int     ppDragStartX, ppDragStartY;
+    private boolean ppCollapsed = false;
+
+    // Overlays
+    private ModuleVisibilityPanel visibilityPanel = null;
+    private ModuleSettingsPanel   settingsPanel   = null;
+    private ContextMenu           contextMenu     = null;
+    private RenameDialog          renameDialog    = null;
+    private ThemeEditorPanel      themeEditor     = null;
 
     private Module rebindingModule = null;
 
@@ -31,9 +49,32 @@ public class ModuleScreen extends Screen {
     }
 
     @Override
-    public boolean isPauseScreen() {
-        return false; // game keeps running while GUI is open
+    public boolean isPauseScreen() { return false; }
+
+    // ── Profile panel geometry ─────────────────────────────────────────────
+
+    private PanelState ppState() {
+        return ProfileManager.getActive().profilePanelState;
     }
+
+    private int ppHeight() {
+        if (ppCollapsed) return PP_HEADER_H;
+        return PP_HEADER_H + ProfileManager.getAll().size() * PP_ROW_H + PP_FOOTER_H;
+    }
+
+    private boolean ppInHeader(double mx, double my) {
+        PanelState s = ppState();
+        return mx >= s.x && mx <= s.x + PP_WIDTH
+                && my >= s.y && my <= s.y + PP_HEADER_H;
+    }
+
+    private boolean ppInPanel(double mx, double my) {
+        PanelState s = ppState();
+        return mx >= s.x && mx <= s.x + PP_WIDTH
+                && my >= s.y && my <= s.y + ppHeight();
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
 
     @Override
     public void init() {
@@ -43,27 +84,101 @@ public class ModuleScreen extends Screen {
             panel.setOnHeaderRightClick(() -> openPanelContextMenu(panel));
             categoryPanels.add(panel);
         }
-
-        profilePanel = new ProfilePanel(
-                () -> {
-                    if (visibilityPanel != null) visibilityPanel = null;
-                    else visibilityPanel = new ModuleVisibilityPanel(200, 50);
-                },
-                () -> {},
-                (name, anchor) -> openProfileContextMenu(name, anchor[0], anchor[1])
-        );
     }
 
-    // ── Profile context menu ───────────────────────────────────────────────
+    // ── Render ────────────────────────────────────────────────────────────
+
+    @Override
+    public void render(GuiGraphics gfx, int mouseX, int mouseY, float delta) {
+        for (CategoryPanel p : categoryPanels)
+            p.render(gfx, font, mouseX, mouseY);
+
+        renderProfilePanel(gfx, mouseX, mouseY);
+
+        if (visibilityPanel != null)
+            visibilityPanel.render(gfx, font, mouseX, mouseY);
+        if (themeEditor != null)
+            themeEditor.render(gfx, font, mouseX, mouseY);
+        if (settingsPanel != null)
+            settingsPanel.render(gfx, font);
+        if (contextMenu != null)
+            contextMenu.render(gfx, font, mouseX, mouseY);
+        if (renameDialog != null)
+            renameDialog.render(gfx, font);
+    }
+
+    private void renderProfilePanel(GuiGraphics gfx, int mouseX, int mouseY) {
+        Theme t = ThemeManager.get();
+        PanelState s = ppState();
+        int x = s.x, y = s.y, w = PP_WIDTH, h = ppHeight();
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
+        gfx.fill(x, y, x + w, y + h, bgColor);
+        gfx.fill(x, y, x + w, y + PP_HEADER_H, t.headerColor);
+        gfx.renderOutline(x, y, w, h, t.borderColor);
+
+        // Header text with lock indicator — same pattern as CategoryPanel
+        gfx.drawString(font, "Profiles" + (s.locked ? " \uD83D\uDD12" : "")
+                        + (ppCollapsed ? " \u25B6" : " \u25BC"),
+                x + PP_PAD, y + 5, t.headerTextColor, false);
+
+        // Save button
+        String saveLabel = "Save";
+        int saveX = x + w - font.width(saveLabel) - PP_PAD - 2;
+        boolean saveHov = mouseX >= saveX - 2 && mouseX <= saveX + font.width(saveLabel) + 2
+                && mouseY >= y + 3 && mouseY <= y + PP_HEADER_H - 3;
+        gfx.drawString(font, saveLabel, saveX, y + 5,
+                saveHov ? t.accentColor : t.disabledTextColor, false);
+
+        if (ppCollapsed) return;
+
+        // Profile rows
+        List<Profile> profiles = ProfileManager.getAll();
+        String activeName = ProfileManager.getActive().name;
+        for (int i = 0; i < profiles.size(); i++) {
+            Profile p = profiles.get(i);
+            int rowY = y + PP_HEADER_H + i * PP_ROW_H;
+            boolean isActive = p.name.equals(activeName);
+            boolean hovered  = mouseX >= x && mouseX <= x + w
+                    && mouseY >= rowY && mouseY <= rowY + PP_ROW_H;
+
+            if (hovered) gfx.fill(x, rowY, x + w, rowY + PP_ROW_H, 0x18FFFFFF);
+            gfx.fill(x, rowY, x + 2, rowY + PP_ROW_H,
+                    isActive ? t.accentColor : t.borderColor);
+            gfx.drawString(font, p.name, x + PP_PAD + 2, rowY + 4,
+                    isActive ? t.accentColor : t.disabledTextColor, false);
+            if (isActive)
+                gfx.drawString(font, "●",
+                        x + w - font.width("●") - PP_PAD, rowY + 4, t.accentColor, false);
+        }
+
+        // Footer buttons
+        int footY = y + h - PP_FOOTER_H;
+        gfx.fill(x, footY, x + w, footY + 1, t.borderColor);
+
+        int btnW = w / 3;
+        String[] labels = { "+ New", "Modules", "Theme" };
+        for (int i = 0; i < 3; i++) {
+            int btnX = x + i * btnW;
+            boolean hov = mouseX >= btnX && mouseX <= btnX + btnW
+                    && mouseY >= footY && mouseY <= footY + PP_FOOTER_H;
+            if (hov) gfx.fill(btnX, footY + 1, btnX + btnW, footY + PP_FOOTER_H, 0x22FFFFFF);
+            if (i > 0) gfx.fill(btnX, footY + 3, btnX + 1, footY + PP_FOOTER_H - 3, t.borderColor);
+            int lx = btnX + (btnW - font.width(labels[i])) / 2;
+            gfx.drawString(font, labels[i], lx, footY + 5,
+                    hov ? t.enabledTextColor : t.disabledTextColor, false);
+        }
+    }
+
+    // ── Context menus ─────────────────────────────────────────────────────
 
     private void openProfileContextMenu(String profileName, int mx, int my) {
-        boolean isActive = profileName.equals(ProfileManager.getActive().name);
-        boolean isOnly   = ProfileManager.getAll().size() == 1;
-
+        boolean isOnly = ProfileManager.getAll().size() == 1;
         contextMenu = new ContextMenu(mx, my)
                 .add(ContextMenu.Entry.of("Load", () -> {
                     ProfileManager.switchTo(profileName);
                     ThemeManager.apply(ProfileManager.getActive().theme);
+                    // Re-apply keybinds from newly loaded profile
+                    net.bananacheese.bananaclient.modules.ModuleManager.applyKeybinds();
                     init();
                     contextMenu = null;
                 }))
@@ -74,12 +189,9 @@ public class ModuleScreen extends Screen {
                 }))
                 .add(ContextMenu.Entry.of("Rename", () -> {
                     contextMenu = null;
-                    renameDialog = new RenameDialog(mx, my, "Rename profile",
-                            profileName, newName -> {
-                        // Rename = copy with new name + delete old
+                    renameDialog = new RenameDialog(mx, my, "Rename profile", profileName, newName -> {
                         var p = ProfileManager.getAll().stream()
-                                .filter(pr -> pr.name.equals(profileName))
-                                .findFirst().orElse(null);
+                                .filter(pr -> pr.name.equals(profileName)).findFirst().orElse(null);
                         if (p != null) {
                             var renamed = p.copy(newName);
                             ProfileManager.save(renamed);
@@ -98,9 +210,8 @@ public class ModuleScreen extends Screen {
         if (!isOnly) {
             contextMenu.add(ContextMenu.Entry.danger("Delete", () -> {
                 ProfileManager.delete(profileName);
-                if (ProfileManager.getActive() != null) {
+                if (ProfileManager.getActive() != null)
                     ThemeManager.apply(ProfileManager.getActive().theme);
-                }
                 init();
                 contextMenu = null;
             }));
@@ -116,15 +227,13 @@ public class ModuleScreen extends Screen {
                 .add(ContextMenu.Entry.of(
                         state.locked ? "Unlock Position" : "Lock Position", () -> {
                             state.locked = !state.locked;
-                            // saveState is private — toggle via setVisible trick to trigger save
                             panel.setVisible(state.visible);
                             contextMenu = null;
                         }))
                 .add(ContextMenu.Entry.of("Reset Position", () -> {
-                    // Reset to whatever default was — just nudge slightly from origin
                     state.x = panel.getCategory().ordinal() * (CategoryPanel.WIDTH + 4) + 4;
                     state.y = 4;
-                    panel.setVisible(state.visible); // triggers saveState
+                    panel.setVisible(state.visible);
                     contextMenu = null;
                 }))
                 .add(ContextMenu.Entry.separator())
@@ -132,35 +241,6 @@ public class ModuleScreen extends Screen {
                     panel.setVisible(false);
                     contextMenu = null;
                 }));
-    }
-
-    // ── Render ────────────────────────────────────────────────────────────
-
-    @Override
-    public void render(GuiGraphics gfx, int mouseX, int mouseY, float delta) {
-        // Category panels
-        for (CategoryPanel p : categoryPanels) {
-            p.render(gfx, font, mouseX, mouseY);
-        }
-
-        // Profile panel
-        profilePanel.render(gfx, font, mouseX, mouseY);
-
-        // Overlays — rendered on top in z order
-        if (visibilityPanel != null)
-            visibilityPanel.render(gfx, font, mouseX, mouseY);
-
-        if (themeEditor != null)
-            themeEditor.render(gfx, font, mouseX, mouseY);
-
-        if (settingsPanel != null)
-            settingsPanel.render(gfx, font);
-
-        if (contextMenu != null)
-            contextMenu.render(gfx, font, mouseX, mouseY);
-
-        if (renameDialog != null)
-            renameDialog.render(gfx, font);
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────
@@ -174,48 +254,34 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        // Rename dialog absorbs all clicks while open
         if (renameDialog != null) {
             if (!renameDialog.isInDialog(mx, my)) renameDialog = null;
             return true;
         }
-
-        // Context menu absorbs clicks
         if (contextMenu != null) {
             boolean hit = contextMenu.mouseClicked(mx, my);
             if (!hit) contextMenu = null;
             return true;
         }
-
-        // Settings panel
         if (settingsPanel != null) {
             if (settingsPanel.isInPanel(mx, my)) {
-                settingsPanel.mouseClicked(mx, my, button);
-                return true;
+                settingsPanel.mouseClicked(mx, my, button); return true;
             }
             settingsPanel = null;
         }
-
-        // Visibility panel
         if (visibilityPanel != null) {
             if (visibilityPanel.isInPanel(mx, my)) {
-                visibilityPanel.mouseClicked(mx, my, button);
-                return true;
+                visibilityPanel.mouseClicked(mx, my, button); return true;
             }
             visibilityPanel = null;
         }
-
-        if (themeEditor != null) {
-            if (themeEditor.isInPanel(mx, my)) {
-                themeEditor.mouseClicked(mx, my, button);
-                return true;
-            }
-            // Don't close on outside click — let it persist
+        if (themeEditor != null && themeEditor.isInPanel(mx, my)) {
+            themeEditor.mouseClicked(mx, my, button); return true;
         }
 
         // Profile panel
-        if (profilePanel.isInPanel(mx, my)) {
-            profilePanel.mouseClicked(mx, my, button);
+        if (ppInPanel(mx, my)) {
+            handleProfilePanelClick(mx, my, button);
             return true;
         }
 
@@ -225,8 +291,8 @@ public class ModuleScreen extends Screen {
                 Module rightClicked = p.mouseClicked(mx, my, button);
                 if (rightClicked != null) {
                     if (rightClicked.hasSettings()) {
-                        int spawnX = p.getState().x + CategoryPanel.WIDTH + 4;
-                        settingsPanel = new ModuleSettingsPanel(rightClicked, spawnX, (int) my);
+                        settingsPanel = new ModuleSettingsPanel(
+                                rightClicked, p.getState().x + CategoryPanel.WIDTH + 4, (int) my);
                     } else {
                         rebindingModule = rightClicked;
                         p.setRebindingModule(rightClicked);
@@ -236,22 +302,105 @@ public class ModuleScreen extends Screen {
             }
         }
 
-        // Click outside everything — close
         onClose();
         return true;
     }
 
+    private void handleProfilePanelClick(double mx, double my, int button) {
+        PanelState s = ppState();
+
+        if (ppInHeader(mx, my)) {
+            if (button == 1) {
+                // Right click header — panel context menu (lock/reset)
+                contextMenu = new ContextMenu((int)mx, (int)my)
+                        .add(ContextMenu.Entry.of(
+                                s.locked ? "Unlock Position" : "Lock Position", () -> {
+                                    s.locked = !s.locked;
+                                    ProfileManager.saveActive();
+                                    contextMenu = null;
+                                }))
+                        .add(ContextMenu.Entry.of("Reset Position", () -> {
+                            s.x = 5; s.y = 5;
+                            ProfileManager.saveActive();
+                            contextMenu = null;
+                        }));
+            } else {
+                // Left click — check save button first
+                int saveX = s.x + PP_WIDTH - 30;
+                if (mx >= saveX) {
+                    ProfileManager.saveActive();
+                    return;
+                }
+                // Otherwise start drag (collapse on release if didn't move)
+                if (!s.locked) {
+                    ppDragging   = true;
+                    ppDragOffX   = (int) mx - s.x;
+                    ppDragOffY   = (int) my - s.y;
+                    ppDragStartX = s.x;
+                    ppDragStartY = s.y;
+                } else {
+                    ppCollapsed = !ppCollapsed;
+                }
+            }
+            return;
+        }
+
+        if (ppCollapsed) return;
+
+        // Footer
+        int footY = s.y + ppHeight() - PP_FOOTER_H;
+        if (my >= footY && button == 0) {
+            int col = (int)(mx - s.x) / (PP_WIDTH / 3);
+            if (col == 0) {
+                // New profile
+                Profile newP = ProfileManager.getActive().copy(
+                        "profile_" + (ProfileManager.getAll().size() + 1));
+                ProfileManager.save(newP);
+                ProfileManager.switchTo(newP.name);
+                ThemeManager.apply(ProfileManager.getActive().theme);
+            } else if (col == 1) {
+                // Modules visibility toggle
+                if (visibilityPanel != null) visibilityPanel = null;
+                else visibilityPanel = new ModuleVisibilityPanel(
+                        s.x + PP_WIDTH + 4, s.y);
+            } else {
+                // Theme editor toggle
+                if (themeEditor != null) themeEditor = null;
+                else themeEditor = new ThemeEditorPanel(s.x + PP_WIDTH + 4, s.y);
+            }
+            return;
+        }
+
+        // Profile rows
+        List<Profile> profiles = ProfileManager.getAll();
+        for (int i = 0; i < profiles.size(); i++) {
+            int rowY = s.y + PP_HEADER_H + i * PP_ROW_H;
+            if (my >= rowY && my <= rowY + PP_ROW_H) {
+                String name = profiles.get(i).name;
+                if (button == 0) {
+                    ProfileManager.switchTo(name);
+                    ThemeManager.apply(ProfileManager.getActive().theme);
+                    net.bananacheese.bananaclient.modules.ModuleManager.applyKeybinds();
+                } else if (button == 1) {
+                    openProfileContextMenu(name, (int) mx, (int) my);
+                }
+                return;
+            }
+        }
+    }
+
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-        if (profilePanel.isDragging())    { profilePanel.drag(mx, my); return true; }
+        if (ppDragging) {
+            PanelState s = ppState();
+            s.x = (int) mx - ppDragOffX;
+            s.y = (int) my - ppDragOffY;
+            return true;
+        }
         if (visibilityPanel != null && visibilityPanel.isDragging()) {
             visibilityPanel.drag(mx, my); return true;
         }
-
-        if (themeEditor != null && themeEditor.isDragging()) {
-            themeEditor.drag(mx, my); return true;
-        }
-
+        if (themeEditor != null && themeEditor.mouseDragged(mx, my)) return true;
         for (CategoryPanel p : categoryPanels) {
             if (p.isDragging()) { p.drag(mx, my); return true; }
         }
@@ -260,11 +409,17 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        profilePanel.stopDrag();
+        if (ppDragging) {
+            ppDragging = false;
+            PanelState s = ppState();
+            // Collapse if position didn't change
+            if (s.x == ppDragStartX && s.y == ppDragStartY)
+                ppCollapsed = !ppCollapsed;
+            ProfileManager.saveActive();
+        }
         if (visibilityPanel != null) visibilityPanel.stopDrag();
-
-        if (themeEditor != null) themeEditor.stopDrag();
-
+        if (themeEditor != null)     themeEditor.stopDrag();
+        if (themeEditor != null) themeEditor.mouseReleased();
         for (CategoryPanel p : categoryPanels) p.stopDrag();
         return super.mouseReleased(mx, my, button);
     }
@@ -272,9 +427,7 @@ public class ModuleScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mx, double my, double dx, double dy) {
         if (visibilityPanel != null && visibilityPanel.mouseScrolled(mx, my, dy)) return true;
-
         if (themeEditor != null && themeEditor.mouseScrolled(mx, my, dy)) return true;
-
         return super.mouseScrolled(mx, my, dx, dy);
     }
 
@@ -282,45 +435,28 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Rename dialog gets keys first
         if (renameDialog != null) {
             boolean done = renameDialog.keyPressed(keyCode);
             if (done) renameDialog = null;
             return true;
         }
-
-        // Rebinding
         if (rebindingModule != null) {
+            // setKeyCode writes through to profile and saves automatically
             rebindingModule.setKeyCode(
-                    keyCode == GLFW.GLFW_KEY_ESCAPE ? GLFW.GLFW_KEY_UNKNOWN : keyCode
-            );
+                    keyCode == GLFW.GLFW_KEY_ESCAPE ? GLFW.GLFW_KEY_UNKNOWN : keyCode);
             rebindingModule = null;
             for (CategoryPanel p : categoryPanels) p.setRebindingModule(null);
             return true;
         }
-
         if (themeEditor != null && themeEditor.keyPressed(keyCode)) return true;
-
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            onClose();
-            return true;
-        }
-
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) { onClose(); return true; }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean charTyped(char c, int modifiers) {
-        if (renameDialog != null) {
-            renameDialog.charTyped(c);
-            return true;
-        }
-
-        if (themeEditor != null) {
-            themeEditor.charTyped(c);
-            return true;
-        }
-
+        if (renameDialog != null) { renameDialog.charTyped(c); return true; }
+        if (themeEditor != null)  { themeEditor.charTyped(c);  return true; }
         return super.charTyped(c, modifiers);
     }
 }

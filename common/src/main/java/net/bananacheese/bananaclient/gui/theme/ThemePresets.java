@@ -20,7 +20,6 @@ public class ThemePresets {
         t.keyBadgeText        = 0xFF666666;
         t.showToggleSwitches  = false;
         t.showCategoryLabels  = true;
-        t.roundedCorners      = false;
         t.backgroundOpacity   = 0.95f;
         return t;
     }
@@ -40,7 +39,6 @@ public class ThemePresets {
         t.keyBadgeText        = 0xFF63B3ED;
         t.showToggleSwitches  = true;
         t.showCategoryLabels  = true;
-        t.roundedCorners      = true;
         t.backgroundOpacity   = 0.93f;
         return t;
     }
@@ -60,7 +58,6 @@ public class ThemePresets {
         t.keyBadgeText        = 0xFF8855E8;
         t.showToggleSwitches  = false;
         t.showCategoryLabels  = true;
-        t.roundedCorners      = true;
         t.backgroundOpacity   = 0.94f;
         return t;
     }

@@ -6,9 +6,9 @@ import net.bananacheese.bananaclient.gui.theme.Theme;
 import net.bananacheese.bananaclient.gui.theme.ThemeManager;
 import net.bananacheese.bananaclient.modules.Module;
 import net.bananacheese.bananaclient.modules.ModuleManager;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -70,29 +70,27 @@ public class CategoryPanel {
         Theme t = ThemeManager.get();
         int x = state.x, y = state.y, w = WIDTH, h = getHeight();
 
-        gfx.fill(x, y, x + w, y + h, t.backgroundColor);
-        gfx.fill(x, y, x + w, y + HEADER_H, t.headerColor);
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
 
-        // Lock icon replaces drag hint when locked
-        String lockIcon = state.locked ? "🔒" : "";
+        // Background, header, border
+        gfx.fill(x, y, x + w, y + h, bgColor);
+        gfx.fill(x, y, x + w, y + HEADER_H, t.headerColor);
+        gfx.renderOutline(x, y, w, h, t.borderColor);
+
         gfx.drawString(font,
                 category.name().charAt(0) + category.name().substring(1).toLowerCase()
-                        + (state.locked ? " 🔒" : ""),
+                        + (state.locked ? " \uD83D\uDD12" : ""),
                 x + PADDING, y + 5, t.headerTextColor, false);
 
-        // Collapse arrow
-        String arrow = state.collapsed ? "▶" : "▼";
-        int arrowX = x + w - font.width(arrow) - PADDING;
-        gfx.drawString(font, arrow, arrowX, y + 5, t.headerTextColor, false);
-
-        gfx.renderOutline(x, y, w, h, t.borderColor);
+        String arrow = state.collapsed ? "\u25B6" : "\u25BC";
+        gfx.drawString(font, arrow,
+                x + w - font.width(arrow) - PADDING, y + 5, t.headerTextColor, false);
 
         if (state.collapsed) return;
 
         List<Module> mods = visibleModules();
-        for (int i = 0; i < mods.size(); i++) {
+        for (int i = 0; i < mods.size(); i++)
             renderRow(gfx, font, mods.get(i), x, y + HEADER_H + i * ROW_H, w, mouseX, mouseY);
-        }
     }
 
     private void renderRow(GuiGraphics gfx, Font font,

@@ -1,6 +1,7 @@
 package net.bananacheese.bananaclient.gui.theme;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import org.lwjgl.glfw.GLFW;
@@ -15,6 +16,10 @@ public class ThemeEditorPanel {
     private static final int ROW_H    = 18;
     private static final int PAD      = 6;
     private static final int MAX_ROWS = 10;
+
+    // Slider drag state
+    private boolean sliderDragging = false;
+    private int sliderX, sliderW; // cached each render for hit testing
 
     // Position
     private int x, y;
@@ -50,9 +55,9 @@ public class ThemeEditorPanel {
 
     private int contentRows() {
         return switch (activeTab) {
-            case 0 -> ThemePresets.all().size() + 1; // presets + divider
+            case 0 -> ThemePresets.all().size() + 1;
             case 1 -> Math.min(COLOR_LABELS.length, MAX_ROWS);
-            case 2 -> 4; // 3 booleans + 1 float
+            case 2 -> 3; // 2 booleans + 1 slider row
             default -> 0;
         };
     }
@@ -118,11 +123,17 @@ public class ThemeEditorPanel {
 
     public void render(GuiGraphics gfx, Font font, int mouseX, int mouseY) {
         Theme t = ThemeManager.get();
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
 
-        // Panel background + header
+        // Panel background
         gfx.fill(x, y, x + WIDTH, y + panelHeight(), t.backgroundColor);
+
+        // Header — rounded top, square bottom
         gfx.fill(x, y, x + WIDTH, y + HEADER_H, t.headerColor);
+
+        // Border
         gfx.renderOutline(x, y, WIDTH, panelHeight(), t.borderColor);
+
         gfx.drawString(font, "Theme: " + t.name, x + PAD, y + 5, t.headerTextColor, false);
 
         // Tabs
@@ -236,7 +247,6 @@ public class ThemeEditorPanel {
         String[][] boolRows = {
                 { "Toggle Switches", String.valueOf(t.showToggleSwitches) },
                 { "Category Labels", String.valueOf(t.showCategoryLabels) },
-                { "Rounded Corners", String.valueOf(t.roundedCorners) }
         };
 
         for (int i = 0; i < boolRows.length; i++) {
@@ -258,8 +268,8 @@ public class ThemeEditorPanel {
         int sliderRowY = contentY + boolRows.length * ROW_H;
         gfx.drawString(font, "Opacity", x + PAD, sliderRowY + 5, t.disabledTextColor, false);
 
-        int sliderX = x + PAD + 55;
-        int sliderW = WIDTH - PAD - 55 - PAD;
+        this.sliderX = x + PAD + 55;
+        this.sliderW = WIDTH - PAD - 55 - PAD;
         int sliderY = sliderRowY + ROW_H / 2 - 2;
 
         // Track
@@ -362,30 +372,33 @@ public class ThemeEditorPanel {
         Theme t = ThemeManager.get();
 
         // Boolean rows
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 2; i++) {
             int rowY = contentY + i * ROW_H;
             if (my >= rowY && my <= rowY + ROW_H) {
                 switch (i) {
                     case 0 -> t.showToggleSwitches = !t.showToggleSwitches;
                     case 1 -> t.showCategoryLabels = !t.showCategoryLabels;
-                    case 2 -> t.roundedCorners     = !t.roundedCorners;
                 }
                 ThemeManager.apply(t);
                 return;
             }
         }
 
-        // Opacity slider
-        int sliderRowY = contentY + 3 * ROW_H;
+        // Opacity slider — at row index 2 now
+        int sliderRowY = contentY + 2 * ROW_H;
         if (my >= sliderRowY && my <= sliderRowY + ROW_H) {
-            int sliderX = x + PAD + 55;
-            int sliderW = WIDTH - PAD - 55 - PAD;
             if (mx >= sliderX && mx <= sliderX + sliderW) {
-                t.backgroundOpacity = (float)((mx - sliderX) / sliderW);
-                t.backgroundOpacity = Math.max(0.1f, Math.min(1.0f, t.backgroundOpacity));
-                ThemeManager.apply(t);
+                sliderDragging = true;
+                applySlider(mx);
             }
         }
+    }
+
+    private void applySlider(double mx) {
+        Theme t = ThemeManager.get();
+        t.backgroundOpacity = (float)((mx - sliderX) / sliderW);
+        t.backgroundOpacity = Math.max(0.1f, Math.min(1.0f, t.backgroundOpacity));
+        ThemeManager.apply(t);
     }
 
     private void commitHexInput() {
@@ -396,6 +409,25 @@ public class ThemeEditorPanel {
         }
         editingColorField = -1;
         hexInput.setLength(0);
+    }
+
+    public boolean mouseDragged(double mx, double my) {
+        if (dragging) {
+            // Panel drag
+            x = (int) mx - dragOffsetX;
+            y = (int) my - dragOffsetY;
+            return true;
+        }
+        if (sliderDragging) {
+            applySlider(mx);
+            return true;
+        }
+        return false;
+    }
+
+    public void mouseReleased() {
+        sliderDragging = false;
+        // Note: panel drag stopDrag() already exists separately
     }
 
     public boolean mouseScrolled(double mx, double my, double delta) {

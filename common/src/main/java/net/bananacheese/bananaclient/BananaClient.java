@@ -8,8 +8,9 @@ public final class BananaClient {
     public static final String MOD_ID = "bananaclient";
 
     public static void init() {
-        ModuleManager.init();    // modules must exist first
-        ProfileManager.init();   // reads disk, sets active profile
-        ThemeManager.init();     // pulls theme from active profile
+        ModuleManager.init();     // register modules with their default keys
+        ProfileManager.init();    // load profiles from disk, set active
+        ModuleManager.applyKeybinds(); // overwrite defaults with saved keys
+        ThemeManager.init();      // pull theme from active profile
     }
 }

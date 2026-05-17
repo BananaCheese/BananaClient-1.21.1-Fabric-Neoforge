@@ -2,6 +2,7 @@ package net.bananacheese.bananaclient.gui;
 
 import net.bananacheese.bananaclient.gui.theme.Theme;
 import net.bananacheese.bananaclient.gui.theme.ThemeManager;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import org.lwjgl.glfw.GLFW;
@@ -38,7 +39,8 @@ public class RenameDialog {
     public void render(GuiGraphics gfx, Font font) {
         Theme t = ThemeManager.get();
 
-        gfx.fill(x, y, x + WIDTH, y + HEIGHT, t.backgroundColor);
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
+        gfx.fill(x, y, x + WIDTH, y + HEIGHT, bgColor);
         gfx.fill(x, y, x + WIDTH, y + HEADER_H, t.headerColor);
         gfx.renderOutline(x, y, WIDTH, HEIGHT, t.borderColor);
         gfx.drawString(font, title, x + PAD, y + 4, t.headerTextColor, false);

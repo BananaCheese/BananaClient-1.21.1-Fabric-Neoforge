@@ -4,6 +4,7 @@ import net.bananacheese.bananaclient.gui.theme.Theme;
 import net.bananacheese.bananaclient.gui.theme.ThemeManager;
 import net.bananacheese.bananaclient.modules.Module;
 import net.bananacheese.bananaclient.modules.ModuleSetting;
+import net.bananacheese.bananaclient.utils.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
@@ -39,10 +40,11 @@ public class ModuleSettingsPanel {
         Theme t = ThemeManager.get();
 
         // Background + header
-        gfx.fill(x, y, x + WIDTH, y + getHeight(), t.backgroundColor);
+        int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
+        gfx.fill(x, y, x + WIDTH, y + ROW_H, bgColor);
         gfx.fill(x, y, x + WIDTH, y + HEADER_H, t.headerColor);
+        gfx.renderOutline(x, y, WIDTH, ROW_H, t.borderColor);
         gfx.drawString(font, module.getName(), x + PADDING, y + 4, t.headerTextColor, false);
-        gfx.renderOutline(x, y, WIDTH, getHeight(), t.borderColor);
 
         List<ModuleSetting<?>> settings = module.getSettings();
 

@@ -4,31 +4,23 @@ public class Theme {
 
     public String  name;
 
-    // Panel background (ARGB int)
     public int     backgroundColor;
     public int     headerColor;
     public int     borderColor;
-
-    // Accent — used for enabled strip, active text, key badge highlight
     public int     accentColor;
 
-    // Text
     public int     enabledTextColor;
     public int     disabledTextColor;
     public int     headerTextColor;
     public int     categoryTextColor;
 
-    // Key badge
     public int     keyBadgeBackground;
     public int     keyBadgeText;
 
-    // Style flags
-    public boolean showToggleSwitches;  // true = frosted toggle, false = left strip
+    public boolean showToggleSwitches;
     public boolean showCategoryLabels;
-    public boolean roundedCorners;      // cosmetic hint for renderer
-    public float   backgroundOpacity;   // 0.0 - 1.0, blended at render time
+    public float   backgroundOpacity;
 
-    // Deep copy — used when player creates a new profile from an existing theme
     public Theme copy() {
         Theme t = new Theme();
         t.name                = this.name + " (copy)";
@@ -44,7 +36,6 @@ public class Theme {
         t.keyBadgeText        = this.keyBadgeText;
         t.showToggleSwitches  = this.showToggleSwitches;
         t.showCategoryLabels  = this.showCategoryLabels;
-        t.roundedCorners      = this.roundedCorners;
         t.backgroundOpacity   = this.backgroundOpacity;
         return t;
     }
