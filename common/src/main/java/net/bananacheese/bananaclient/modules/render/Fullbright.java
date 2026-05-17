@@ -1,4 +1,4 @@
-package net.bananacheese.bananaclient.modules.misc;
+package net.bananacheese.bananaclient.modules.render;
 
 import net.bananacheese.bananaclient.mixin.OptionInstanceAccessor;
 import net.bananacheese.bananaclient.modules.Module;
@@ -11,7 +11,7 @@ public class Fullbright extends Module {
     private double previousGamma = 0.5;
 
     public Fullbright() {
-        super("Fullbright", "Removes all darkness", Category.RENDER, GLFW.GLFW_KEY_B);
+        super("Fullbright", "Removes all darkness", Category.RENDER, GLFW.GLFW_KEY_UNKNOWN);
         INSTANCE = this;
     }
 

@@ -11,7 +11,7 @@ public abstract class Module {
 
     protected static final Minecraft mc = Minecraft.getInstance();
 
-    public enum Category { COMBAT, MOVEMENT, RENDER, MISC }
+    public enum Category { COMBAT, PLAYER, MOVEMENT, RENDER, MISC }
 
     private final String   name;
     private final String   description;

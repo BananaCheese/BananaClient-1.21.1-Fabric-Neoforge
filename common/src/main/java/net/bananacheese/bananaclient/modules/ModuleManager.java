@@ -1,7 +1,10 @@
 package net.bananacheese.bananaclient.modules;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
-import net.bananacheese.bananaclient.modules.misc.Fullbright;
+import net.bananacheese.bananaclient.modules.combat.ReachDisplay;
+import net.bananacheese.bananaclient.modules.render.Fullbright;
+import net.bananacheese.bananaclient.modules.movement.NoFall;
+import net.bananacheese.bananaclient.modules.render.Coordinates;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +17,17 @@ public class ModuleManager {
     public static void init() {
         if (initialized) return;
         initialized = true;
+
+        // Combat
+        register(new ReachDisplay());
+
+        // Movement
+        register(new NoFall());
+
+        // Render
+        register(new Coordinates());
+
+        // Misc
         register(new Fullbright());
     }
 

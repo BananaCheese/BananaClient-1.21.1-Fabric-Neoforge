@@ -39,11 +39,10 @@ public class ModuleSettingsPanel {
     public void render(GuiGraphics gfx, Font font) {
         Theme t = ThemeManager.get();
 
-        // Background + header
         int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
-        gfx.fill(x, y, x + WIDTH, y + ROW_H, bgColor);
+        gfx.fill(x, y, x + WIDTH, y + getHeight(), bgColor);      // was ROW_H
         gfx.fill(x, y, x + WIDTH, y + HEADER_H, t.headerColor);
-        gfx.renderOutline(x, y, WIDTH, ROW_H, t.borderColor);
+        gfx.renderOutline(x, y, WIDTH, getHeight(), t.borderColor); // was ROW_H
         gfx.drawString(font, module.getName(), x + PADDING, y + 4, t.headerTextColor, false);
 
         List<ModuleSetting<?>> settings = module.getSettings();

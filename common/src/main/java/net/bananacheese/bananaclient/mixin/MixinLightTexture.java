@@ -1,6 +1,6 @@
 package net.bananacheese.bananaclient.mixin;
 
-import net.bananacheese.bananaclient.modules.misc.Fullbright;
+import net.bananacheese.bananaclient.modules.render.Fullbright;
 import net.minecraft.client.renderer.LightTexture;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

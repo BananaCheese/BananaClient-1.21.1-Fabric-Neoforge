@@ -3,6 +3,7 @@ package net.bananacheese.bananaclient.neoforge;
 import dev.architectury.event.events.client.ClientGuiEvent;
 import net.bananacheese.bananaclient.BananaClient;
 import net.bananacheese.bananaclient.hud.HudRenderer;
+import net.bananacheese.bananaclient.modules.movement.NoFall;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -15,6 +16,9 @@ public class BananaClientNeoForge {
         BananaClient.init();
         ClientGuiEvent.RENDER_HUD.register((gfx, tickDelta) -> {
             HudRenderer.onRenderHud(gfx);
+            dev.architectury.event.events.client.ClientTickEvent.CLIENT_POST.register(instance -> {
+                NoFall.onTick();
+            });
         });
     }
 }
