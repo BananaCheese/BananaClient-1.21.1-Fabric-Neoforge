@@ -231,8 +231,9 @@ public class ModuleScreen extends Screen {
                             contextMenu = null;
                         }))
                 .add(ContextMenu.Entry.of("Reset Position", () -> {
-                    state.x = panel.getCategory().ordinal() * (CategoryPanel.WIDTH + 4) + 4;
-                    state.y = 4;
+                    PanelState defaults = Profile.defaultStateFor(panel.getCategory());
+                    state.x = defaults.x;
+                    state.y = defaults.y;
                     panel.setVisible(state.visible);
                     contextMenu = null;
                 }))
@@ -329,7 +330,9 @@ public class ModuleScreen extends Screen {
                                     contextMenu = null;
                                 }))
                         .add(ContextMenu.Entry.of("Reset Position", () -> {
-                            s.x = 5; s.y = 5;
+                            PanelState defaults = Profile.defaultProfilePanelState();
+                            s.x = defaults.x;
+                            s.y = defaults.y;
                             ProfileManager.saveActive();
                             contextMenu = null;
                         }));
@@ -369,9 +372,12 @@ public class ModuleScreen extends Screen {
                 ThemeManager.apply(ProfileManager.getActive().theme);
             } else if (col == 1) {
                 // Modules visibility toggle
-                if (visibilityPanel != null) visibilityPanel = null;
-                else visibilityPanel = new ModuleVisibilityPanel(
-                        s.x + PP_WIDTH + 4, s.y);
+                if (visibilityPanel != null) {
+                    visibilityPanel = null;
+                } else {
+                    visibilityPanel = new ModuleVisibilityPanel(s.x + PP_WIDTH + 4, s.y);
+                    visibilityPanel.setCategoryPanels(categoryPanels); // ← add this line
+                }
             } else {
                 // Theme editor toggle
                 if (themeEditor != null) themeEditor = null;

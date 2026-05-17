@@ -84,12 +84,16 @@ public class Profile {
         return p;
     }
 
-    private static PanelState defaultStateFor(Module.Category category) {
+    public static PanelState defaultStateFor(Module.Category category) {
         return switch (category) {
             case COMBAT   -> new PanelState(150, 5);
             case MOVEMENT -> new PanelState(275, 5);
             case RENDER   -> new PanelState(400, 5);
             case MISC     -> new PanelState(525, 5);
         };
+    }
+
+    public static PanelState defaultProfilePanelState() {
+        return new PanelState(5, 5);
     }
 }

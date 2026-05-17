@@ -71,8 +71,8 @@ public class ContextMenu {
         int h = totalHeight();
 
         int bgColor = RenderUtil.applyOpacity(t.backgroundColor, t.backgroundOpacity);
-        gfx.fill(x, y, x + WIDTH, y + ROW_H, bgColor);
-        gfx.renderOutline(x, y, WIDTH, ROW_H, t.borderColor);
+        gfx.fill(x, y, x + WIDTH, y + h, bgColor);           // was y + ROW_H
+        gfx.renderOutline(x, y, WIDTH, h, t.borderColor);     // was WIDTH, ROW_H
 
         int curY = y;
         for (Entry e : entries) {
