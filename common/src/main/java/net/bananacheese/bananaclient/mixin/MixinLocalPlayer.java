@@ -21,6 +21,9 @@ public class MixinLocalPlayer {
             self.fallDistance = 0f;
         }
 
+        // NoFall auto-place — runs every tick when mode is AutoPlace
+        NoFall.onTick(self);
+
         // Reach — apply attribute every tick to handle respawn/dimension change resets
         if (Reach.isActive()) {
             var attr = self.getAttribute(Attributes.BLOCK_INTERACTION_RANGE);
@@ -28,11 +31,11 @@ public class MixinLocalPlayer {
             var entityAttr = self.getAttribute(Attributes.ENTITY_INTERACTION_RANGE);
             if (entityAttr != null) entityAttr.setBaseValue(Reach.getDistance());
         } else {
-            // Restore defaults when disabled
             var attr = self.getAttribute(Attributes.BLOCK_INTERACTION_RANGE);
             if (attr != null && attr.getBaseValue() != 4.5) attr.setBaseValue(4.5);
             var entityAttr = self.getAttribute(Attributes.ENTITY_INTERACTION_RANGE);
-            if (entityAttr != null && entityAttr.getBaseValue() != 3.0) entityAttr.setBaseValue(3.0);
+            if (entityAttr != null && entityAttr.getBaseValue() != 3.0)
+                entityAttr.setBaseValue(3.0);
         }
     }
 }

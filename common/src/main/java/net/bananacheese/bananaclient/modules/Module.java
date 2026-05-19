@@ -65,7 +65,7 @@ public abstract class Module {
     }
 
     public boolean hasSettings() {
-        return !settings.isEmpty() || !registrySettings.isEmpty();
+        return !settings.isEmpty() || !registrySettings.isEmpty() || !cycleSettings.isEmpty();
     }
 
     public boolean  isEnabled()      { return enabled; }
@@ -91,5 +91,16 @@ public abstract class Module {
         if (keyCode == GLFW.GLFW_KEY_UNKNOWN) return "NONE";
         String n = GLFW.glfwGetKeyName(keyCode, 0);
         return n != null ? n.toUpperCase() : "KEY_" + keyCode;
+    }
+
+    protected final List<CycleSetting> cycleSettings = new ArrayList<>();
+
+    protected CycleSetting addCycleSetting(CycleSetting setting) {
+        cycleSettings.add(setting);
+        return setting;
+    }
+
+    public List<CycleSetting> getCycleSettings() {
+        return Collections.unmodifiableList(cycleSettings);
     }
 }
