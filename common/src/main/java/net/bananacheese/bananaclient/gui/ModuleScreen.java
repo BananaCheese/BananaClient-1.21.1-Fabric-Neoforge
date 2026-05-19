@@ -1,6 +1,5 @@
 package net.bananacheese.bananaclient.gui;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.bananacheese.bananaclient.gui.profile.PanelState;
 import net.bananacheese.bananaclient.gui.profile.Profile;
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
@@ -100,7 +99,7 @@ public class ModuleScreen extends Screen {
         if (themeEditor != null)
             themeEditor.render(gfx, font, mouseX, mouseY);
         if (settingsPanel != null)
-            settingsPanel.render(gfx, font);
+            settingsPanel.render(gfx, font, mouseX, mouseY);
         if (contextMenu != null)
             contextMenu.render(gfx, font, mouseX, mouseY);
         if (renameDialog != null)
@@ -265,8 +264,13 @@ public class ModuleScreen extends Screen {
             return true;
         }
         if (settingsPanel != null) {
+            if (settingsPanel.isRegistrySelectorOpen(mx, my)) {
+                settingsPanel.forwardClickToRegistrySelector(mx, my, button);
+                return true;
+            }
             if (settingsPanel.isInPanel(mx, my)) {
-                settingsPanel.mouseClicked(mx, my, button); return true;
+                settingsPanel.mouseClicked(mx, my, button);
+                return true;
             }
             settingsPanel = null;
         }
@@ -406,6 +410,7 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (settingsPanel != null && settingsPanel.mouseDragged(mx, my, button)) return true;
         if (ppDragging) {
             PanelState s = ppState();
             s.x = (int) mx - ppDragOffX;
@@ -427,6 +432,7 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        if (settingsPanel != null) settingsPanel.mouseReleased();
         if (ppDragging) {
             ppDragging = false;
             PanelState s = ppState();
@@ -447,6 +453,7 @@ public class ModuleScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double dx, double dy) {
+        if (settingsPanel != null && settingsPanel.mouseScrolled(mx, my, dy)) return true;
         if (visibilityPanel != null && visibilityPanel.mouseScrolled(mx, my, dy)) return true;
         if (themeEditor != null && themeEditor.mouseScrolled(mx, my, dy)) return true;
         return super.mouseScrolled(mx, my, dx, dy);
@@ -469,6 +476,7 @@ public class ModuleScreen extends Screen {
             for (CategoryPanel p : categoryPanels) p.setRebindingModule(null);
             return true;
         }
+        if (settingsPanel != null && settingsPanel.keyPressed(keyCode)) return true;
         if (themeEditor != null && themeEditor.keyPressed(keyCode)) return true;
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) { onClose(); return true; }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -477,6 +485,7 @@ public class ModuleScreen extends Screen {
     @Override
     public boolean charTyped(char c, int modifiers) {
         if (renameDialog != null) { renameDialog.charTyped(c); return true; }
+        if (settingsPanel != null) { settingsPanel.charTyped(c); return true; }
         if (themeEditor != null)  { themeEditor.charTyped(c);  return true; }
         return super.charTyped(c, modifiers);
     }

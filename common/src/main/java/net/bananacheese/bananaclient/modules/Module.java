@@ -11,6 +11,8 @@ public abstract class Module {
 
     protected static final Minecraft mc = Minecraft.getInstance();
 
+    protected final List<RegistryListSetting> registrySettings = new ArrayList<>();
+
     public enum Category { COMBAT, PLAYER, MOVEMENT, RENDER, MISC }
 
     private final String   name;
@@ -49,11 +51,22 @@ public abstract class Module {
         return setting;
     }
 
+    protected RegistryListSetting addRegistrySettings(RegistryListSetting setting) {
+        registrySettings.add(setting);
+        return setting;
+    }
+
+    public List<RegistryListSetting> getRegistrySettings() {
+        return Collections.unmodifiableList(registrySettings);
+    }
+
     public List<ModuleSetting<?>> getSettings() {
         return Collections.unmodifiableList(settings);
     }
 
-    public boolean hasSettings() { return !settings.isEmpty(); }
+    public boolean hasSettings() {
+        return !settings.isEmpty() || !registrySettings.isEmpty();
+    }
 
     public boolean  isEnabled()      { return enabled; }
     public String   getName()        { return name; }
