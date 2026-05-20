@@ -16,12 +16,7 @@ public class MixinLocalPlayer {
     private void onAiStepHead(CallbackInfo ci) {
         LocalPlayer self = (LocalPlayer)(Object) this;
 
-        // NoFall reset mode — zero fall distance before MC processes it
-        if (NoFall.shouldReset()) {
-            self.fallDistance = 0f;
-        }
-
-        // NoFall auto-place — runs every tick when mode is AutoPlace
+        // NoFall auto-place tick
         NoFall.onTick(self);
 
         // Reach — apply attribute every tick to handle respawn/dimension change resets
