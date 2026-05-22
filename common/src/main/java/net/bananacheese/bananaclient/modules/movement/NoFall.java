@@ -210,8 +210,6 @@ public class NoFall extends Module {
 
         ItemStack stack = player.getInventory().getItem(slot);
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        System.out.println("[BananaClient] NoFall: placing " + itemId
-                + " (height=" + String.format("%.2f", heightAboveSurface) + ")");
 
         int current = player.getInventory().selected;
         if (slot != current) {
@@ -225,7 +223,6 @@ public class NoFall extends Module {
         placedItemId = itemId;
 
         boolean placed = placeItem(player, mc, itemId, surface);
-        System.out.println("[BananaClient] NoFall: placed=" + placed);
 
         if (placed) {
             hasPlaced = true;
@@ -286,7 +283,6 @@ public class NoFall extends Module {
             mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hit);
             return true;
         } catch (Exception e) {
-            System.out.println("[BananaClient] NoFall: block place exception: " + e.getMessage());
             return false;
         }
     }
@@ -308,13 +304,11 @@ public class NoFall extends Module {
         }
 
         if (!fluidFound) {
-            System.out.println("[BananaClient] NoFall: pickup — no fluid found near " + placedPos);
             return;
         }
 
         int bucketSlot = findEmptyBucket(player);
         if (bucketSlot < 0) {
-            System.out.println("[BananaClient] NoFall: pickup — no empty bucket");
             return;
         }
 
