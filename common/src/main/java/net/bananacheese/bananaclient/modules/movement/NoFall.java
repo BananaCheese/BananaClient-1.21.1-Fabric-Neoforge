@@ -40,11 +40,12 @@ public class NoFall extends Module {
                     "Only use items from the hotbar", true)
     );
 
-    private final ModuleSetting<Boolean> autoPickup = addSetting(
-            new ModuleSetting<>("Auto Pickup",
-                    "Pick up placed water after landing", true)
+    private final ModuleSetting<Boolean> cancelBounce = addSetting(
+            new ModuleSetting<>("Cancel Bounce",
+                    "Cancel slime/cobweb bounce on landing", true)
     );
 
+    // Items that can be placed while falling
     private final RegistryListSetting allowedItems = addRegistrySettings(
             RegistryListSetting.items("Allowed Items",
                     "Items that can be auto-placed",
@@ -55,6 +56,16 @@ public class NoFall extends Module {
                     ResourceLocation.withDefaultNamespace("slime_block"))
     );
 
+    // Items whose placed block should be auto-collected after landing.
+    // Defaults: water_bucket and powder_snow_bucket only.
+    // Hay/cobweb/slime are intentionally excluded — they stay placed.
+    private final RegistryListSetting pickupItems = addRegistrySettings(
+            RegistryListSetting.items("Auto Pickup Items",
+                    "Items to auto-collect after placing",
+                    ResourceLocation.withDefaultNamespace("water_bucket"),
+                    ResourceLocation.withDefaultNamespace("powder_snow_bucket"))
+    );
+
     // ── Constants ─────────────────────────────────────────────────────────
 
     private static final float  FALL_THRESHOLD    = 3.5f;
@@ -63,11 +74,11 @@ public class NoFall extends Module {
 
     // ── State ─────────────────────────────────────────────────────────────
 
-    private boolean  hasPlaced            = false;
-    private int      prevSlot             = -1;
-    private int      pickupDelay          = 0;
-    private BlockPos placedPos            = null;
-    private boolean  placedWasFluidBucket = false;
+    private boolean      hasPlaced    = false;
+    private int          prevSlot     = -1;
+    private int          pickupDelay  = 0;
+    private BlockPos     placedPos    = null;
+    private ResourceLocation placedItemId = null; // track which item we placed
 
     public NoFall() {
         super("NoFall", "Cancels fall damage", Category.MOVEMENT, GLFW.GLFW_KEY_UNKNOWN);
@@ -78,11 +89,11 @@ public class NoFall extends Module {
     public void onDisable() { resetState(); }
 
     private void resetState() {
-        hasPlaced            = false;
-        prevSlot             = -1;
-        pickupDelay          = 0;
-        placedPos            = null;
-        placedWasFluidBucket = false;
+        hasPlaced   = false;
+        prevSlot    = -1;
+        pickupDelay = 0;
+        placedPos   = null;
+        placedItemId = null;
     }
 
     // ── Static accessors ──────────────────────────────────────────────────
@@ -97,11 +108,56 @@ public class NoFall extends Module {
     }
 
     public static void onTick(LocalPlayer player) {
-        if (!isActive() || !INSTANCE.mode.is("AutoPlace")) return;
-        INSTANCE.tickAutoPlace(player);
+        if (!isActive()) return;
+        if (INSTANCE.mode.is("AutoPlace"))
+            INSTANCE.tickAutoPlace(player);
+        if (INSTANCE.cancelBounce.getValue())
+            INSTANCE.tickCancelBounce(player);
     }
 
-    // ── Per-tick logic ────────────────────────────────────────────────────
+    // ── Bounce cancel ─────────────────────────────────────────────────────
+
+    /**
+     * If the player just landed on a slime block or cobweb and
+     * Cancel Bounce is enabled, zero out their vertical velocity
+     * so they stop instead of bouncing back up.
+     *
+     * We only apply this when:
+     * - The player is on the ground this tick
+     * - Their Y velocity is upward (the bounce has already been applied
+     *   by Minecraft but we cancel it before it moves the player)
+     * - The block directly below them is slime or honey
+     */
+    private void tickCancelBounce(LocalPlayer player) {
+        if (!player.onGround()) return;
+
+        // Check if Y velocity is positive — the bounce upward has been set
+        double vy = player.getDeltaMovement().y;
+        if (vy <= 0) return;
+
+        // Check block below player feet
+        BlockPos below = BlockPos.containing(
+                player.getX(), player.getY() - 0.01, player.getZ());
+        var state = Minecraft.getInstance().level != null
+                ? Minecraft.getInstance().level.getBlockState(below)
+                : null;
+        if (state == null) return;
+
+        boolean isBouncyBlock =
+                state.is(Blocks.SLIME_BLOCK) ||
+                        state.is(Blocks.HONEY_BLOCK);  // honey also has mild bounce
+
+        if (isBouncyBlock) {
+            // Keep horizontal movement, zero vertical
+            player.setDeltaMovement(
+                    player.getDeltaMovement().x,
+                    0,
+                    player.getDeltaMovement().z
+            );
+        }
+    }
+
+    // ── Per-tick auto-place logic ─────────────────────────────────────────
 
     private void tickAutoPlace(LocalPlayer player) {
         Minecraft mc = Minecraft.getInstance();
@@ -113,21 +169,27 @@ public class NoFall extends Module {
                 if (prevSlot >= 0 && prevSlot < 9)
                     player.getInventory().selected = prevSlot;
 
-                if (autoPickup.getValue() && placedPos != null && placedWasFluidBucket) {
-                    pickupDelay = 3;
+                // Only schedule pickup if the placed item is in the pickup list
+                boolean shouldPickup = placedItemId != null
+                        && pickupItems.contains(placedItemId)
+                        && placedPos != null;
+
+                if (shouldPickup) {
+                    pickupDelay = 2;
                 } else {
-                    placedPos = null;
+                    placedPos    = null;
+                    placedItemId = null;
                 }
-                hasPlaced            = false;
-                prevSlot             = -1;
-                placedWasFluidBucket = false;
+                hasPlaced = false;
+                prevSlot  = -1;
             }
 
             if (pickupDelay > 0) {
                 pickupDelay--;
                 if (pickupDelay == 0 && placedPos != null) {
-                    tryPickupWater(player, mc);
-                    placedPos = null;
+                    tryPickup(player, mc);
+                    placedPos    = null;
+                    placedItemId = null;
                 }
             }
             return;
@@ -159,8 +221,8 @@ public class NoFall extends Module {
             prevSlot = -1;
         }
 
-        placedPos            = BlockPos.containing(player.getX(), player.getY(), player.getZ());
-        placedWasFluidBucket = isWaterBucket(itemId);
+        placedPos    = BlockPos.containing(player.getX(), player.getY(), player.getZ());
+        placedItemId = itemId;
 
         boolean placed = placeItem(player, mc, itemId, surface);
         System.out.println("[BananaClient] NoFall: placed=" + placed);
@@ -172,31 +234,18 @@ public class NoFall extends Module {
                 player.getInventory().selected = prevSlot;
                 prevSlot = -1;
             }
-            placedPos            = null;
-            placedWasFluidBucket = false;
+            placedPos    = null;
+            placedItemId = null;
         }
     }
 
     // ── Placement ─────────────────────────────────────────────────────────
 
-    /**
-     * Water bucket — pure client-side useItem looking straight down.
-     * This worked correctly before and shouldn't be changed.
-     * The server accepts this naturally because water bucket right-click
-     * in air is valid regardless of ground state.
-     *
-     * Block items / powder snow — send a StatusOnly(true) packet so the
-     * server's reach check passes, then send UseItemOn targeting the surface.
-     * Also call useItemOn client-side for the visual.
-     * MixinLivingEntity handles any residual fall damage.
-     */
     private boolean placeItem(LocalPlayer player, Minecraft mc,
                               ResourceLocation itemId, BlockPos surface) {
         if (isWaterBucket(itemId)) {
-            // Pure client-side — exactly what worked before
             return placeWithLookDown(player, mc);
         } else {
-            // Block / powder snow bucket
             return placeBlockItem(player, mc, surface);
         }
     }
@@ -231,15 +280,11 @@ public class NoFall extends Module {
             BlockHitResult hit = new BlockHitResult(
                     hitVec, Direction.UP, surface, false);
 
-            // Send the placement packet directly
             PacketUtils.sendPacket(new ServerboundUseItemOnPacket(
                     InteractionHand.MAIN_HAND, hit, 0));
 
-            // Client-side visual — will ghost but MixinLivingEntity cancels damage
-            InteractionResult result = mc.gameMode.useItemOn(
-                    player, InteractionHand.MAIN_HAND, hit);
-
-            return true; // always true — packet was sent
+            mc.gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hit);
+            return true;
         } catch (Exception e) {
             System.out.println("[BananaClient] NoFall: block place exception: " + e.getMessage());
             return false;
@@ -248,20 +293,22 @@ public class NoFall extends Module {
 
     // ── Pickup ────────────────────────────────────────────────────────────
 
-    private void tryPickupWater(LocalPlayer player, Minecraft mc) {
+    private void tryPickup(LocalPlayer player, Minecraft mc) {
         if (mc.level == null || placedPos == null) return;
 
-        boolean waterFound = false;
+        // Scan ±3 blocks for the placed fluid
+        boolean fluidFound = false;
         for (int dy = -3; dy <= 3; dy++) {
             var state = mc.level.getBlockState(placedPos.above(dy));
-            if (state.is(Blocks.WATER) || state.is(Blocks.POWDER_SNOW)) {
-                waterFound = true;
+            if (state.is(Blocks.WATER) || state.is(Blocks.POWDER_SNOW)
+                    || state.is(Blocks.LAVA)) {
+                fluidFound = true;
                 break;
             }
         }
 
-        if (!waterFound) {
-            System.out.println("[BananaClient] NoFall: pickup — no water/snow found");
+        if (!fluidFound) {
+            System.out.println("[BananaClient] NoFall: pickup — no fluid found near " + placedPos);
             return;
         }
 
@@ -279,7 +326,6 @@ public class NoFall extends Module {
             player.getInventory().selected = bucketSlot;
         }
 
-        // Look down and use empty bucket — collects fluid at feet
         placeWithLookDown(player, mc);
         player.getInventory().selected = savedSlot;
     }
