@@ -58,7 +58,7 @@ public class NoFall extends Module {
     // ── Constants ─────────────────────────────────────────────────────────
 
     private static final float  FALL_THRESHOLD    = 3.5f;
-    private static final double PLACE_WHEN_WITHIN = 4.0;
+    private static final double PLACE_WHEN_WITHIN = 3.99;
     private static final int    GROUND_SCAN_DEPTH = 64;
 
     // ── State ─────────────────────────────────────────────────────────────
