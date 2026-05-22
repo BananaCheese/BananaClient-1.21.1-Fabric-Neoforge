@@ -16,7 +16,7 @@ public class Reach extends Module implements HudModule {
     private static Reach INSTANCE;
 
     private final ModuleSetting<Float> distance = addSetting(
-            new ModuleSetting<>("Distance", "Reach distance in blocks", 6.0f, 2.0f, 10.0f)
+            new ModuleSetting<>("Distance", "Reach distance in blocks", 6.0f, 2.0f, 6.0f)
     );
 
     private final ModuleSetting<Boolean> showDisplay = addSetting(
