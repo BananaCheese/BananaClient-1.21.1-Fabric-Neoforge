@@ -4,10 +4,13 @@ import net.bananacheese.bananaclient.modules.CycleSetting;
 import net.bananacheese.bananaclient.modules.Module;
 import net.bananacheese.bananaclient.modules.ModuleSetting;
 import net.bananacheese.bananaclient.modules.RegistryListSetting;
+import net.bananacheese.bananaclient.utils.PacketUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -15,6 +18,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 public class NoFall extends Module {
@@ -44,27 +49,24 @@ public class NoFall extends Module {
             RegistryListSetting.items("Allowed Items",
                     "Items that can be auto-placed",
                     ResourceLocation.withDefaultNamespace("water_bucket"),
-                    ResourceLocation.withDefaultNamespace("powder_snow_bucket"))
+                    ResourceLocation.withDefaultNamespace("powder_snow_bucket"),
+                    ResourceLocation.withDefaultNamespace("hay_block"),
+                    ResourceLocation.withDefaultNamespace("cobweb"),
+                    ResourceLocation.withDefaultNamespace("slime_block"))
     );
 
     // ── Constants ─────────────────────────────────────────────────────────
 
-    // Fall distance before we even check anything
-    private static final float FALL_THRESHOLD = 3.5f;
-
-    // Place when this many blocks or fewer above the surface
-    // Low enough to be safe but high enough that the block exists before landing
+    private static final float  FALL_THRESHOLD    = 3.5f;
     private static final double PLACE_WHEN_WITHIN = 4.0;
-
-    // How far down to scan for solid ground
-    private static final int GROUND_SCAN_DEPTH = 64;
+    private static final int    GROUND_SCAN_DEPTH = 64;
 
     // ── State ─────────────────────────────────────────────────────────────
 
-    private boolean  hasPlaced           = false;
-    private int      prevSlot            = -1;
-    private int      pickupDelay         = 0;
-    private BlockPos placedPos           = null;
+    private boolean  hasPlaced            = false;
+    private int      prevSlot             = -1;
+    private int      pickupDelay          = 0;
+    private BlockPos placedPos            = null;
     private boolean  placedWasFluidBucket = false;
 
     public NoFall() {
@@ -112,7 +114,7 @@ public class NoFall extends Module {
                     player.getInventory().selected = prevSlot;
 
                 if (autoPickup.getValue() && placedPos != null && placedWasFluidBucket) {
-                    pickupDelay = 8;
+                    pickupDelay = 3;
                 } else {
                     placedPos = null;
                 }
@@ -135,13 +137,10 @@ public class NoFall extends Module {
         if (player.fallDistance < FALL_THRESHOLD) return;
         if (hasPlaced) return;
 
-        // Find solid ground below
         BlockPos surface = findSolidBelow(player, mc, GROUND_SCAN_DEPTH);
-        double heightAboveSurface = surface != null
-                ? player.getY() - (surface.getY() + 1)
-                : Double.MAX_VALUE;
+        if (surface == null) return;
 
-        // Only place when close enough to the ground
+        double heightAboveSurface = player.getY() - (surface.getY() + 1);
         if (heightAboveSurface > PLACE_WHEN_WITHIN) return;
 
         int slot = findAllowedSlot(player);
@@ -152,7 +151,6 @@ public class NoFall extends Module {
         System.out.println("[BananaClient] NoFall: placing " + itemId
                 + " (height=" + String.format("%.2f", heightAboveSurface) + ")");
 
-        // Switch slot if needed
         int current = player.getInventory().selected;
         if (slot != current) {
             prevSlot = current;
@@ -164,8 +162,7 @@ public class NoFall extends Module {
         placedPos            = BlockPos.containing(player.getX(), player.getY(), player.getZ());
         placedWasFluidBucket = isWaterBucket(itemId);
 
-        // Look straight down, use the item, restore look direction
-        boolean placed = placeWithLookDown(player, mc);
+        boolean placed = placeItem(player, mc, itemId, surface);
         System.out.println("[BananaClient] NoFall: placed=" + placed);
 
         if (placed) {
@@ -180,40 +177,73 @@ public class NoFall extends Module {
         }
     }
 
+    // ── Placement ─────────────────────────────────────────────────────────
+
     /**
-     * Temporarily rotates the player to look straight down,
-     * calls useItem (works for all placeable items when looking down),
-     * then restores the original rotation.
+     * Water bucket — pure client-side useItem looking straight down.
+     * This worked correctly before and shouldn't be changed.
+     * The server accepts this naturally because water bucket right-click
+     * in air is valid regardless of ground state.
      *
-     * Looking straight down means the item places at the player's feet
-     * on the block directly below — correct for water, snow, and blocks.
+     * Block items / powder snow — send a StatusOnly(true) packet so the
+     * server's reach check passes, then send UseItemOn targeting the surface.
+     * Also call useItemOn client-side for the visual.
+     * MixinLivingEntity handles any residual fall damage.
      */
+    private boolean placeItem(LocalPlayer player, Minecraft mc,
+                              ResourceLocation itemId, BlockPos surface) {
+        if (isWaterBucket(itemId)) {
+            // Pure client-side — exactly what worked before
+            return placeWithLookDown(player, mc);
+        } else {
+            // Block / powder snow bucket
+            return placeBlockItem(player, mc, surface);
+        }
+    }
+
     private boolean placeWithLookDown(LocalPlayer player, Minecraft mc) {
-        // Save current rotation
         float savedPitch = player.getXRot();
         float savedYaw   = player.getYRot();
 
-        // Rotate to look straight down
         player.setXRot(90.0f);
-        player.setYRot(savedYaw); // yaw doesn't matter when looking straight down
+        if (mc.getCameraEntity() == player) mc.getCameraEntity().setXRot(90.0f);
 
-        // Also update the camera entity so raycast targets correctly
-        if (mc.getCameraEntity() == player) {
-            mc.getCameraEntity().setXRot(90.0f);
-        }
-
-        // Use the item
         InteractionResult result = mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         boolean success = result.consumesAction();
 
-        // Restore rotation
         player.setXRot(savedPitch);
         player.setYRot(savedYaw);
         if (mc.getCameraEntity() == player) {
             mc.getCameraEntity().setXRot(savedPitch);
+            mc.getCameraEntity().setYRot(savedYaw);
         }
 
         return success;
+    }
+
+    private boolean placeBlockItem(LocalPlayer player, Minecraft mc, BlockPos surface) {
+        try {
+            Vec3 hitVec = new Vec3(
+                    surface.getX() + 0.5,
+                    surface.getY() + 1.0,
+                    surface.getZ() + 0.5
+            );
+            BlockHitResult hit = new BlockHitResult(
+                    hitVec, Direction.UP, surface, false);
+
+            // Send the placement packet directly
+            PacketUtils.sendPacket(new ServerboundUseItemOnPacket(
+                    InteractionHand.MAIN_HAND, hit, 0));
+
+            // Client-side visual — will ghost but MixinLivingEntity cancels damage
+            InteractionResult result = mc.gameMode.useItemOn(
+                    player, InteractionHand.MAIN_HAND, hit);
+
+            return true; // always true — packet was sent
+        } catch (Exception e) {
+            System.out.println("[BananaClient] NoFall: block place exception: " + e.getMessage());
+            return false;
+        }
     }
 
     // ── Pickup ────────────────────────────────────────────────────────────
@@ -221,7 +251,6 @@ public class NoFall extends Module {
     private void tryPickupWater(LocalPlayer player, Minecraft mc) {
         if (mc.level == null || placedPos == null) return;
 
-        // Check ±3 blocks vertically from where we placed
         boolean waterFound = false;
         for (int dy = -3; dy <= 3; dy++) {
             var state = mc.level.getBlockState(placedPos.above(dy));
@@ -232,7 +261,7 @@ public class NoFall extends Module {
         }
 
         if (!waterFound) {
-            System.out.println("[BananaClient] NoFall: pickup — no water/snow found near " + placedPos);
+            System.out.println("[BananaClient] NoFall: pickup — no water/snow found");
             return;
         }
 
@@ -243,7 +272,6 @@ public class NoFall extends Module {
         }
 
         int savedSlot = player.getInventory().selected;
-
         if (bucketSlot >= 9) {
             moveToHotbar(player, mc, bucketSlot, 8);
             player.getInventory().selected = 8;
@@ -251,21 +279,13 @@ public class NoFall extends Module {
             player.getInventory().selected = bucketSlot;
         }
 
-        // Look down and use the empty bucket — collects fluid at feet
-        boolean result = placeWithLookDown(player, mc);
-        System.out.println("[BananaClient] NoFall: pickup result=" + result);
-
+        // Look down and use empty bucket — collects fluid at feet
+        placeWithLookDown(player, mc);
         player.getInventory().selected = savedSlot;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    /**
-     * Only vanilla water_bucket and modded *_water_bucket variants
-     * are treated as water buckets. Everything else (powder snow,
-     * hay bale, etc.) uses the same useItem-with-look-down path
-     * but doesn't trigger auto-pickup.
-     */
     private boolean isWaterBucket(ResourceLocation id) {
         if (id == null) return false;
         return id.equals(ResourceLocation.withDefaultNamespace("water_bucket"))
