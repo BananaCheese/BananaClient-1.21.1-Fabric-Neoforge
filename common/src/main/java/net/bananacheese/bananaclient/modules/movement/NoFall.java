@@ -175,7 +175,7 @@ public class NoFall extends Module {
                         && placedPos != null;
 
                 if (shouldPickup) {
-                    pickupDelay = 2;
+                    pickupDelay = 5;
                 } else {
                     placedPos    = null;
                     placedItemId = null;
@@ -292,14 +292,28 @@ public class NoFall extends Module {
     private void tryPickup(LocalPlayer player, Minecraft mc) {
         if (mc.level == null || placedPos == null) return;
 
-        // Scan ±3 blocks for the placed fluid
+        // Scan nearby area for placed fluid
         boolean fluidFound = false;
-        for (int dy = -3; dy <= 3; dy++) {
-            var state = mc.level.getBlockState(placedPos.above(dy));
-            if (state.is(Blocks.WATER) || state.is(Blocks.POWDER_SNOW)
-                    || state.is(Blocks.LAVA)) {
-                fluidFound = true;
-                break;
+
+        int horizontalRadius = 2;
+        int verticalRadius = 3;
+
+        for (int dx = -horizontalRadius; dx <= horizontalRadius && !fluidFound; dx++) {
+            for (int dz = -horizontalRadius; dz <= horizontalRadius && !fluidFound; dz++) {
+                for (int dy = -verticalRadius; dy <= verticalRadius; dy++) {
+
+                    var checkPos = placedPos.offset(dx, dy, dz);
+                    var state = mc.level.getBlockState(checkPos);
+
+                    if (state.is(Blocks.WATER)
+                            || state.is(Blocks.POWDER_SNOW)
+                            || state.is(Blocks.LAVA)) {
+
+                        fluidFound = true;
+
+                        break;
+                    }
+                }
             }
         }
 
@@ -313,6 +327,7 @@ public class NoFall extends Module {
         }
 
         int savedSlot = player.getInventory().selected;
+
         if (bucketSlot >= 9) {
             moveToHotbar(player, mc, bucketSlot, 8);
             player.getInventory().selected = 8;
@@ -321,9 +336,9 @@ public class NoFall extends Module {
         }
 
         placeWithLookDown(player, mc);
+
         player.getInventory().selected = savedSlot;
     }
-
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private boolean isWaterBucket(ResourceLocation id) {
