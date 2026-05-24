@@ -2,7 +2,6 @@ package net.bananacheese.bananaclient.modules;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
 import net.bananacheese.bananaclient.modules.player.Reach;
-import net.bananacheese.bananaclient.modules.render.FreeCamera;
 import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.bananacheese.bananaclient.modules.render.Fullbright;
 import net.bananacheese.bananaclient.modules.movement.NoFall;

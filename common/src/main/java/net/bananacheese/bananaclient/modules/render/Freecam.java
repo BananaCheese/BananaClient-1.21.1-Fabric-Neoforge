@@ -1,8 +1,10 @@
 package net.bananacheese.bananaclient.modules.render;
 
+import net.bananacheese.bananaclient.modules.CycleSetting;
 import net.bananacheese.bananaclient.modules.Module;
 import net.bananacheese.bananaclient.modules.ModuleSetting;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
@@ -21,11 +23,17 @@ public class Freecam extends Module {
 
     private final ModuleSetting<Boolean> returnOnDamage = addSetting(
             new ModuleSetting<>("Return on Damage",
-                    "Disable freecam when taking damage", true)
+                    "Disable freecam when taking damage", false)
+    );
+
+    private final ModuleSetting<Boolean> returnOnDeath = addSetting(
+            new ModuleSetting<>("Return on Death",
+                    "Disable freecam when you die", true)
     );
 
     private final ModuleSetting<Boolean> noClip = addSetting(
-            new ModuleSetting<>("No Clip", "Camera passes through blocks", true)
+            new ModuleSetting<>("No Clip",
+                    "Camera passes through blocks", true)
     );
 
     private final ModuleSetting<Boolean> showPlayer = addSetting(
@@ -33,22 +41,36 @@ public class Freecam extends Module {
                     "Render the player body at original position", true)
     );
 
-    // ── Camera state — public so Camera mixin can read them ───────────────
+    private final ModuleSetting<Boolean> showHands = addSetting(
+            new ModuleSetting<>("Show Hands",
+                    "Render hands while in freecam", false)
+    );
 
-    // Current and previous positions for lerp interpolation
+    private final ModuleSetting<Boolean> staticView = addSetting(
+            new ModuleSetting<>("Static View",
+                    "Disables FOV effects and view bobbing", true)
+    );
+
+    // ── Camera state ──────────────────────────────────────────────────────
+    // All public so mixins can read them directly
+
+    // Current + previous positions — used for lerp between frames
     public double posX, posY, posZ;
     public double prevPosX, prevPosY, prevPosZ;
 
-    // Current and previous rotations for lerp interpolation
+    // Current + previous rotations — used for lerp between frames
     public float yaw, pitch;
     public float lastYaw, lastPitch;
 
     // ── Input state ───────────────────────────────────────────────────────
-    // Tracked as booleans so keys work correctly (not polled every tick)
-    private boolean forward, backward, left, right, up, down;
+    // Boolean flags updated by key events — not polled per tick
+    // This is the key pattern from Meteor that makes left/right work correctly
+    public boolean moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown;
 
-    // ── Saved state ───────────────────────────────────────────────────────
+    // ── Saved state for restore ───────────────────────────────────────────
     private CameraType savedPerspective;
+    private double savedFovScale;
+    private boolean savedBobView;
 
     public Freecam() {
         super("Freecam", "Detaches camera from player", Category.RENDER, GLFW.GLFW_KEY_UNKNOWN);
@@ -58,54 +80,68 @@ public class Freecam extends Module {
     public static Freecam getInstance() { return INSTANCE; }
     public static boolean isActive()    { return INSTANCE != null && INSTANCE.isEnabled(); }
 
-    // ── Enable / Disable ──────────────────────────────────────────────────
+    // ── Enable ────────────────────────────────────────────────────────────
 
     @Override
     public void onEnable() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null) { toggle(); return; }
+        if (mc.player == null || mc.level == null || mc.gameRenderer == null) {
+            toggle(); return;
+        }
 
-        // Start camera at the current camera position (not player feet)
+        // Start camera at current rendered camera position (eye height, not feet)
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
         posX = camPos.x;  posY = camPos.y;  posZ = camPos.z;
         prevPosX = posX;  prevPosY = posY;  prevPosZ = posZ;
 
+        // Start rotation from player's current look direction
         yaw      = mc.player.getYRot();
         pitch    = mc.player.getXRot();
         lastYaw  = yaw;
         lastPitch = pitch;
 
+        // Save settings we might temporarily override
         savedPerspective = mc.options.getCameraType();
+        savedFovScale    = mc.options.fovEffectScale().get();
+        savedBobView     = mc.options.bobView().get();
 
-        // Unpress all movement keys so they don't carry over
+        if (staticView.getValue()) {
+            mc.options.fovEffectScale().set(0.0);
+            mc.options.bobView().set(false);
+        }
+
+        // Unpress all movement keys so they don't carry into freecam
         unpressKeys(mc);
-
-        // Reset boolean input state
-        forward = backward = left = right = up = down = false;
+        moveForward = moveBackward = moveLeft = moveRight = moveUp = moveDown = false;
     }
+
+    // ── Disable ───────────────────────────────────────────────────────────
 
     @Override
     public void onDisable() {
         Minecraft mc = Minecraft.getInstance();
 
-        // Restore perspective
-        if (savedPerspective != null && mc.options != null) {
+        // Restore saved options
+        if (mc.options != null) {
             mc.options.setCameraType(savedPerspective);
+            if (staticView.getValue()) {
+                mc.options.fovEffectScale().set(savedFovScale);
+                mc.options.bobView().set(savedBobView);
+            }
         }
 
-        // Restore player rotation so view snaps back correctly
+        // Restore player state
         if (mc.player != null) {
             mc.player.setYRot(yaw);
             mc.player.setXRot(pitch);
             mc.player.setDeltaMovement(Vec3.ZERO);
+            mc.player.fallDistance = 0f;
         }
 
-        // Re-press no keys — just clear state
-        forward = backward = left = right = up = down = false;
+        moveForward = moveBackward = moveLeft = moveRight = moveUp = moveDown = false;
     }
 
     private void unpressKeys(Minecraft mc) {
-        // Unpress vanilla keybinds so they don't affect the player
         mc.options.keyUp.setDown(false);
         mc.options.keyDown.setDown(false);
         mc.options.keyLeft.setDown(false);
@@ -118,7 +154,6 @@ public class Freecam extends Module {
 
     /**
      * Called from MixinLocalPlayer.aiStep every tick.
-     * Updates camera position from input state and freezes the player.
      */
     public static void onTick(LocalPlayer player) {
         if (!isActive()) return;
@@ -126,118 +161,111 @@ public class Freecam extends Module {
     }
 
     private void tick(LocalPlayer player) {
-        // Save previous position for interpolation
-        prevPosX = posX;
-        prevPosY = posY;
-        prevPosZ = posZ;
-        lastYaw   = yaw;
-        lastPitch = pitch;
+        // Save previous state for interpolation
+        prevPosX = posX;  prevPosY = posY;  prevPosZ = posZ;
+        lastYaw   = yaw;  lastPitch = pitch;
 
-        // Freeze the real player
+        // Freeze the real player in place
         player.setDeltaMovement(Vec3.ZERO);
         player.fallDistance = 0f;
 
-        // Build velocity from input booleans — same approach as Meteor
-        // Vec3.directionFromRotation handles Minecraft's coordinate system correctly
-        Vec3 fwdVec   = Vec3.directionFromRotation(0,   yaw);      // horizontal forward
-        Vec3 rightVec = Vec3.directionFromRotation(0,   yaw + 90); // horizontal right
-        Vec3 lookVec  = Vec3.directionFromRotation(pitch, yaw);    // true look direction
+        // Build movement vectors using Minecraft's coordinate system
+        // Vec3.directionFromRotation correctly handles the yaw/pitch → world space
+        Vec3 forward = Vec3.directionFromRotation(pitch, yaw);
+        Vec3 strafe  = Vec3.directionFromRotation(0, yaw + 90);
 
-        double spd = speed.getValue() * 0.1;
-
-        // Sprint doubles speed (respects player's sprint key)
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.options.keySprint.isDown()) spd *= 2.0;
+        // Base speed: 0.5 blocks/tick * multiplier, sprint doubles it
+        double spd = 0.5 * speed.getValue();
+        if (Minecraft.getInstance().options.keySprint.isDown()) spd *= 2.0;
 
         double velX = 0, velY = 0, velZ = 0;
+        boolean hasFwdBack = false, hasStrafe = false;
 
-        // Forward/backward move in the look direction (including pitch)
-        if (forward)  { velX += lookVec.x * spd; velY += lookVec.y * spd; velZ += lookVec.z * spd; }
-        if (backward) { velX -= lookVec.x * spd; velY -= lookVec.y * spd; velZ -= lookVec.z * spd; }
+        if (moveForward)  { velX += forward.x * spd; velY += forward.y * spd; velZ += forward.z * spd; hasFwdBack = true; }
+        if (moveBackward) { velX -= forward.x * spd; velY -= forward.y * spd; velZ -= forward.z * spd; hasFwdBack = true; }
+        if (moveRight)    { velX += strafe.x  * spd;                          velZ += strafe.z  * spd; hasStrafe = true; }
+        if (moveLeft)     { velX -= strafe.x  * spd;                          velZ -= strafe.z  * spd; hasStrafe = true; }
+        if (moveUp)       { velY += spd; }
+        if (moveDown)     { velY -= spd; }
 
-        // Left/right strafe horizontally
-        if (right)    { velX += rightVec.x * spd; velZ += rightVec.z * spd; }
-        if (left)     { velX -= rightVec.x * spd; velZ -= rightVec.z * spd; }
+        // Normalize diagonal movement so speed is consistent
+        if (hasFwdBack && hasStrafe) {
+            double diag = 1.0 / Math.sqrt(2);
+            velX *= diag; velZ *= diag;
+        }
 
-        // Up/down — vertical only
-        if (up)       { velY += spd; }
-        if (down)     { velY -= spd; }
-
-        posX += velX;
-        posY += velY;
-        posZ += velZ;
+        posX += velX; posY += velY; posZ += velZ;
     }
 
+    // ── Mouse input ───────────────────────────────────────────────────────
+
     /**
-     * Called from MixinMouseHandler to redirect mouse input to camera rotation.
-     * Mouse rotation is applied immediately (not tick-delayed) for responsiveness.
+     * Called from MixinMouseHandler — redirects mouse to camera rotation.
+     * deltaX/deltaY are already sensitivity-scaled by vanilla.
      */
-    public static void onMouseTurn(double deltaX, double deltaY) {
+    public static void changeLookDirection(double deltaX, double deltaY) {
         if (!isActive()) return;
         INSTANCE.lastYaw   = INSTANCE.yaw;
         INSTANCE.lastPitch = INSTANCE.pitch;
-        INSTANCE.yaw       += (float) deltaX;
-        INSTANCE.pitch     += (float) deltaY;
-        INSTANCE.pitch      = Mth.clamp(INSTANCE.pitch, -90f, 90f);
+        INSTANCE.yaw      += (float) deltaX;
+        INSTANCE.pitch    += (float) deltaY;
+        INSTANCE.pitch     = Mth.clamp(INSTANCE.pitch, -90f, 90f);
     }
 
-    /**
-     * Called from MixinKeyboardHandler to track key state.
-     * Returns true if the key was consumed by freecam.
-     * action: GLFW.GLFW_PRESS or GLFW.GLFW_RELEASE
-     */
-    public static boolean onKey(int key, int action, Minecraft mc) {
-        if (!isActive()) return false;
+    // ── Key input ─────────────────────────────────────────────────────────
 
+    /**
+     * Called from MixinKeyboardHandler for every key event while freecam is active.
+     * Returns true if the key was consumed (prevents it from affecting the player).
+     * action: GLFW.GLFW_PRESS, GLFW.GLFW_RELEASE, or GLFW.GLFW_REPEAT
+     */
+    public static boolean onKey(int key, int action) {
+        if (!isActive()) return false;
+        Minecraft mc = Minecraft.getInstance();
         boolean pressed = action != GLFW.GLFW_RELEASE;
 
-        // Match against the player's configured keybinds
-        if (matchesKey(mc.options.keyUp, key))    { INSTANCE.forward  = pressed; return true; }
-        if (matchesKey(mc.options.keyDown, key))  { INSTANCE.backward = pressed; return true; }
-        if (matchesKey(mc.options.keyLeft, key))  { INSTANCE.left     = pressed; return true; }
-        if (matchesKey(mc.options.keyRight, key)) { INSTANCE.right    = pressed; return true; }
-        if (matchesKey(mc.options.keyJump, key))  { INSTANCE.up       = pressed; return true; }
-        // Down = player's crouch/sneak key — respects custom bindings
-        if (matchesKey(mc.options.keyShift, key)) { INSTANCE.down     = pressed; return true; }
+        if (matchesKey(mc.options.keyUp,    key)) { INSTANCE.moveForward  = pressed; mc.options.keyUp.setDown(false);    return true; }
+        if (matchesKey(mc.options.keyDown,  key)) { INSTANCE.moveBackward = pressed; mc.options.keyDown.setDown(false);  return true; }
+        if (matchesKey(mc.options.keyLeft,  key)) { INSTANCE.moveLeft     = pressed; mc.options.keyLeft.setDown(false);  return true; }
+        if (matchesKey(mc.options.keyRight, key)) { INSTANCE.moveRight    = pressed; mc.options.keyRight.setDown(false); return true; }
+        if (matchesKey(mc.options.keyJump,  key)) { INSTANCE.moveUp       = pressed; mc.options.keyJump.setDown(false);  return true; }
+        // Down uses the player's configured sneak/shift key — not hardcoded
+        if (matchesKey(mc.options.keyShift, key)) { INSTANCE.moveDown     = pressed; mc.options.keyShift.setDown(false); return true; }
 
         return false;
     }
 
-    private static boolean matchesKey(net.minecraft.client.KeyMapping mapping, int key) {
+    private static boolean matchesKey(KeyMapping mapping, int key) {
         return mapping.getKey().getValue() == key;
     }
 
-    /**
-     * Called when the real player takes damage.
-     */
-    public static void onPlayerDamage() {
-        if (!isActive()) return;
+    // ── Damage / Death callbacks ──────────────────────────────────────────
+
+    public static void onDamage() {
+        if (!isActive() || INSTANCE == null) return;
         if (INSTANCE.returnOnDamage.getValue()) INSTANCE.toggle();
     }
+
+    public static void onDeath() {
+        if (!isActive() || INSTANCE == null) return;
+        if (INSTANCE.returnOnDeath.getValue()) INSTANCE.toggle();
+    }
+
+    // ── Render helpers ────────────────────────────────────────────────────
 
     public static boolean shouldRenderPlayer() {
         return isActive() && INSTANCE.showPlayer.getValue();
     }
 
+    public static boolean shouldRenderHands() {
+        return !isActive() || INSTANCE.showHands.getValue();
+    }
+
     // ── Interpolated getters for Camera mixin ─────────────────────────────
 
-    public static double getX(float partialTick) {
-        return Mth.lerp(partialTick, INSTANCE.prevPosX, INSTANCE.posX);
-    }
-
-    public static double getY(float partialTick) {
-        return Mth.lerp(partialTick, INSTANCE.prevPosY, INSTANCE.posY);
-    }
-
-    public static double getZ(float partialTick) {
-        return Mth.lerp(partialTick, INSTANCE.prevPosZ, INSTANCE.posZ);
-    }
-
-    public static float getYaw(float partialTick) {
-        return Mth.lerp(partialTick, INSTANCE.lastYaw, INSTANCE.yaw);
-    }
-
-    public static float getPitch(float partialTick) {
-        return Mth.lerp(partialTick, INSTANCE.lastPitch, INSTANCE.pitch);
-    }
+    public static double getX(float pt)     { return Mth.lerp(pt, INSTANCE.prevPosX, INSTANCE.posX); }
+    public static double getY(float pt)     { return Mth.lerp(pt, INSTANCE.prevPosY, INSTANCE.posY); }
+    public static double getZ(float pt)     { return Mth.lerp(pt, INSTANCE.prevPosZ, INSTANCE.posZ); }
+    public static float  getYaw(float pt)   { return Mth.lerp(pt, INSTANCE.lastYaw,  INSTANCE.yaw);  }
+    public static float  getPitch(float pt) { return Mth.lerp(pt, INSTANCE.lastPitch, INSTANCE.pitch); }
 }
