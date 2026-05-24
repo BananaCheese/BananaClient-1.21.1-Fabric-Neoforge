@@ -2,6 +2,7 @@ package net.bananacheese.bananaclient.gui.profile;
 
 import net.bananacheese.bananaclient.config.ConfigManager;
 import net.bananacheese.bananaclient.gui.theme.ThemePresets;
+import net.bananacheese.bananaclient.modules.ModuleManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,6 +19,7 @@ public class ProfileManager {
     public static void init() {
         loadAll();
         loadActiveFromDisk();
+        active.loadModuleSettings(ModuleManager.getAll());
 
         // Always ensure at least a default profile exists
         if (profiles.isEmpty()) {
@@ -68,7 +70,11 @@ public class ProfileManager {
     }
 
     public static void saveActive() {
-        if (active != null) save(active);
+        if (active != null) {
+            active.saveModuleSettings(
+                    net.bananacheese.bananaclient.modules.ModuleManager.getAll());
+            save(active);
+        }
     }
 
     public static void delete(String name) {

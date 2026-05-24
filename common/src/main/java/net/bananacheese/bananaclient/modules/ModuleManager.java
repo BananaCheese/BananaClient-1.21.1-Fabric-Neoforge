@@ -2,6 +2,8 @@ package net.bananacheese.bananaclient.modules;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
 import net.bananacheese.bananaclient.modules.player.Reach;
+import net.bananacheese.bananaclient.modules.render.FreeCamera;
+import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.bananacheese.bananaclient.modules.render.Fullbright;
 import net.bananacheese.bananaclient.modules.movement.NoFall;
 import net.bananacheese.bananaclient.modules.render.Coordinates;
@@ -28,9 +30,11 @@ public class ModuleManager {
 
         // Render
         register(new Coordinates());
+        register(new Fullbright());
+        register(new Freecam());
 
         // Misc
-        register(new Fullbright());
+        
     }
 
     // Called by BananaClient.init() after ProfileManager is ready

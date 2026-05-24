@@ -304,13 +304,10 @@ public class ModuleScreen extends Screen {
             if (p.isInPanel(mx, my)) {
                 Module rightClicked = p.mouseClicked(mx, my, button);
                 if (rightClicked != null) {
-                    if (rightClicked.hasSettings()) {
-                        settingsPanel = new ModuleSettingsPanel(
-                                rightClicked, p.getState().x + CategoryPanel.WIDTH + 4, (int) my);
-                    } else {
-                        rebindingModule = rightClicked;
-                        p.setRebindingModule(rightClicked);
-                    }
+                    // Always open settings panel — keybind is accessible from within it
+                    int spawnX = p.getState().x + CategoryPanel.WIDTH + 4;
+                    settingsPanel = new ModuleSettingsPanel(rightClicked, spawnX, (int) my);
+                    // Enter rebind mode — clicking the key badge in settings panel handles it
                 }
                 return true;
             }

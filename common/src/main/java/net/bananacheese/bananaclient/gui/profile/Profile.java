@@ -1,7 +1,9 @@
 package net.bananacheese.bananaclient.gui.profile;
 
 import net.bananacheese.bananaclient.gui.theme.Theme;
+import net.bananacheese.bananaclient.modules.CycleSetting;
 import net.bananacheese.bananaclient.modules.Module;
+import net.bananacheese.bananaclient.modules.ModuleSetting;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -92,6 +94,45 @@ public class Profile {
             case RENDER   -> new PanelState(525, 5);
             case MISC     -> new PanelState(650, 5);
         };
+    }
+
+    public Map<String, Map<String, String>> moduleSettings = new HashMap<>();
+
+    public void saveModuleSettings(List<Module> modules) {
+        for (Module m : modules) {
+            Map<String, String> settings = new HashMap<>();
+            for (ModuleSetting<?> s : m.getSettings()) {
+                settings.put(s.getName(), String.valueOf(s.getValue()));
+            }
+            for (CycleSetting cs : m.getCycleSettings()) {
+                settings.put(cs.getName(), cs.getValue());
+            }
+            moduleSettings.put(m.getName(), settings);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void loadModuleSettings(List<Module> modules) {
+        for (Module m : modules) {
+            Map<String, String> settings = moduleSettings.get(m.getName());
+            if (settings == null) continue;
+            for (ModuleSetting<?> s : m.getSettings()) {
+                String val = settings.get(s.getName());
+                if (val == null) continue;
+                try {
+                    if (s.isBoolean())
+                        ((ModuleSetting<Boolean>) s).setValue(Boolean.parseBoolean(val));
+                    else if (s.isFloat())
+                        ((ModuleSetting<Float>) s).setValue(Float.parseFloat(val));
+                    else if (s.isInteger())
+                        ((ModuleSetting<Integer>) s).setValue(Integer.parseInt(val));
+                } catch (Exception ignored) {}
+            }
+            for (CycleSetting cs : m.getCycleSettings()) {
+                String val = settings.get(cs.getName());
+                if (val != null) cs.set(val);
+            }
+        }
     }
 
     public static PanelState defaultProfilePanelState() {

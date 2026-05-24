@@ -1,6 +1,7 @@
 package net.bananacheese.bananaclient.mixin;
 
 import net.bananacheese.bananaclient.modules.movement.NoFall;
+import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,6 +21,16 @@ public class MixinLivingEntity {
             if (NoFall.isActive()) {
                 cir.setReturnValue(false);
             }
+        }
+    }
+
+    @Inject(method = "hurt", at = @At("HEAD"))
+    private void onHurt(net.minecraft.world.damagesource.DamageSource source,
+                        float amount,
+                        CallbackInfoReturnable<Boolean> cir) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player != null && mc.player == (Object) this) {
+            Freecam.onPlayerDamage();
         }
     }
 }

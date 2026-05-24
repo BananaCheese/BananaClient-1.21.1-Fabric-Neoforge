@@ -6,9 +6,13 @@
   "client": [
     "OptionInstanceAccessor",
     "MixinKeyboardHandler",
-    "MixinLivingEntity",
     "MixinLocalPlayer",
-    "MixinConnection"
+    "MixinConnection",
+    "MixinLivingEntity",
+    "MixinEntityRenderer",
+    "MixinGameRenderer",
+    "MixinMouseHandler",
+    "MouseHandlerAccessor"
   ],
   "mixins": [
   ],

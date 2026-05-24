@@ -1,6 +1,7 @@
 package net.bananacheese.bananaclient.mixin;
 
 import net.bananacheese.bananaclient.modules.movement.NoFall;
+import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -14,6 +15,10 @@ public class MixinConnection {
     @ModifyVariable(method = "send(Lnet/minecraft/network/protocol/Packet;)V",
             at = @At("HEAD"), argsOnly = true)
     private Packet<?> onSend(Packet<?> packet) {
+        if (Freecam.isActive() && packet instanceof ServerboundMovePlayerPacket) {
+            return new ServerboundMovePlayerPacket.StatusOnly(false);
+        }
+
         if (!NoFall.shouldSendPacket()) return packet;
         if (!(packet instanceof ServerboundMovePlayerPacket move)) return packet;
         if (move.isOnGround()) return packet; // already grounded, skip to avoid recursion
