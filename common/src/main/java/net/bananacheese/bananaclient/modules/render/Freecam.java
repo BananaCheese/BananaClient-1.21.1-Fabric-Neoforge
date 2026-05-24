@@ -236,7 +236,7 @@ public class Freecam extends Module {
     }
 
     private static boolean matchesKey(KeyMapping mapping, int key) {
-        return mapping.getKey().getValue() == key;
+        return mapping.getDefaultKey().getValue() == key;
     }
 
     // ── Damage / Death callbacks ──────────────────────────────────────────

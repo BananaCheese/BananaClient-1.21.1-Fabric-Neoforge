@@ -30,7 +30,7 @@ public class MixinLivingEntity {
                         CallbackInfoReturnable<Boolean> cir) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player != null && mc.player == (Object) this) {
-            Freecam.onPlayerDamage();
+            Freecam.onDamage();
         }
     }
 }
