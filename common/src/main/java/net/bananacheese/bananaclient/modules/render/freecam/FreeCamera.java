@@ -21,25 +21,6 @@ import java.util.UUID;
 
 import static net.minecraft.client.Minecraft.getInstance;
 
-/**
- * A synthetic, client-only "player" entity that represents the freecam.
- * It is spawned into the world when freecam is enabled and set as the
- * client's camera entity via {@code Minecraft#setCameraEntity}. Because it
- * is a real entity, it gets real (and correct) collision, flight, potion
- * effects, etc, from vanilla instead of us re-implementing all of that by
- * hand.
- *
- * Ported from Xolt's standalone Freecam mod (util.FreeCamera) and adapted
- * to Minecraft 1.21.1's (pre "ClientInput" refactor) Input API and to
- * BananaClient's module/settings system.
- *
- * NOTE FOR MAINTAINERS: this class relies on a handful of exact vanilla
- * method names (moveTo, serverAiStep, isEffectiveAi, getFrictionInfluencedSpeed,
- * Input#tick(boolean,float)). These are correct for 1.21.1 Mojang mappings as
- * far as this port could verify without a local compiler, but if the module
- * fails to compile, this file + the mixins in the freecam mixin package are
- * the first place to check against your local mappings.
- */
 public class FreeCamera extends AbstractClientPlayer {
 
     public Input input;
@@ -64,7 +45,59 @@ public class FreeCamera extends AbstractClientPlayer {
     public void tick() {
         input.tick(false, 0.3F);
         doMotion();
+
+        // Remember where we started so No Clip can compute a pure additive
+        // delta below, independent of whatever travel()/move() below does.
+        double startX = getX();
+        double startY = getY();
+        double startZ = getZ();
+
         super.tick();
+
+        if (Freecam.isNoClip()) {
+            // Don't trust Entity#noPhysics to disable block collision here —
+            // instead bypass collision-aware movement entirely: compute this
+            // tick's movement by hand (using vanilla's own rotation-transform
+            // formula, so direction/feel matches normal flight exactly) and
+            // just teleport there. This is a guaranteed no-clip regardless of
+            // what noPhysics does or doesn't skip on a given version.
+            double[] delta = computeNoClipDelta();
+            this.setPos(startX + delta[0], startY + delta[1], startZ + delta[2]);
+            this.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        }
+    }
+
+    // Mirrors vanilla LivingEntity#getInputVector: rotates the raw xxa/zza
+    // input by yaw to get a world-space horizontal direction, so movement
+    // feel matches normal (collision-aware) flight exactly.
+    private double[] computeNoClipDelta() {
+        double yawRad = Math.toRadians(this.getYRot());
+        double sin = Math.sin(yawRad);
+        double cos = Math.cos(yawRad);
+
+        double relX = this.xxa;
+        double relZ = this.zza;
+        double lenSq = relX * relX + relZ * relZ;
+        if (lenSq > 1.0) {
+            double len = Math.sqrt(lenSq);
+            relX /= len;
+            relZ /= len;
+        }
+
+        double horizontalSpeed = Freecam.getSpeed() / 2.0;
+        if (this.isSprinting()) horizontalSpeed *= 2.0;
+
+        double dx = (relX * cos - relZ * sin) * horizontalSpeed;
+        double dz = (relZ * cos + relX * sin) * horizontalSpeed;
+
+        double dy = 0.0;
+        boolean jump = input.jumping;
+        boolean sneak = input.shiftKeyDown;
+        if (jump ^ sneak) {
+            dy = (jump ? 1.0 : -1.0) * getAbilities().getFlyingSpeed() * 4.0;
+        }
+
+        return new double[]{dx, dy, dz};
     }
 
     @Override
@@ -157,16 +190,10 @@ public class FreeCamera extends AbstractClientPlayer {
     }
 
     private void doMotion() {
-        // "Creative"-style flight: vertical speed from the flying-speed ability
-        // (adjusted every tick from the module's Speed setting), horizontal
-        // speed from LivingEntityMixin#getFrictionInfluencedSpeed.
         getAbilities().setFlyingSpeed(Freecam.getSpeed() / 10f);
         getAbilities().flying = true;
         this.noPhysics = Freecam.isNoClip();
 
-        // Vertical movement (ascend/descend) isn't part of the normal
-        // xxa/zza travel() impulse — vanilla creative flight applies it
-        // directly from the jump/sneak keys, so we have to do the same here.
         boolean jump = input.jumping;
         boolean sneak = input.shiftKeyDown;
         if (jump ^ sneak) {
@@ -187,16 +214,11 @@ public class FreeCamera extends AbstractClientPlayer {
         return getYRot();
     }
 
-    // Ensures LivingEntity#aiStep() actually processes movement for this
-    // entity even though it's not a "real" LocalPlayer.
     @Override
     public boolean isEffectiveAi() {
         return true;
     }
 
-    // Translates our polled `input` into the xxa/zza/jumping impulses that
-    // LivingEntity#travel() consumes each tick. LocalPlayer normally does
-    // this itself; FreeCamera has to do it manually since it isn't one.
     @Override
     protected void serverAiStep() {
         Vec2 moveVector = new Vec2(input.leftImpulse, input.forwardImpulse);
