@@ -2,10 +2,8 @@ package net.bananacheese.bananaclient.mixin;
 
 import net.bananacheese.bananaclient.modules.movement.NoFall;
 import net.bananacheese.bananaclient.modules.player.Reach;
-import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,15 +19,9 @@ public class MixinLocalPlayer {
         // NoFall auto-place tick
         NoFall.onTick(self);
 
-        // Freecam — update speed/noclip settings each tick
-        Freecam.onTick(self);
-
-        // Keep player frozen while freecam is active
-        // Zero velocity AND reset to saved position to prevent vibration
-        if (Freecam.isActive()) {
-            self.setDeltaMovement(Vec3.ZERO);
-            self.fallDistance = 0f;
-        }
+        // Note: freezing the real player while freecam is active, and the
+        // freecam's own per-tick movement, are now handled by
+        // MixinEntity (freecam mixin package) and FreeCamera itself.
 
         // Reach — apply attribute every tick
         if (Reach.isActive()) {

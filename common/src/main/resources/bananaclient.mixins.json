@@ -8,7 +8,17 @@
     "MixinKeyboardHandler",
     "MixinLocalPlayer",
     "MixinConnection",
-    "MixinLivingEntity"
+    "MixinLivingEntity",
+    "freecam.MixinEntity",
+    "freecam.MixinCamera",
+    "freecam.MixinGameRenderer",
+    "freecam.MixinEntityRenderDispatcher",
+    "freecam.MixinItemInHandRenderer",
+    "freecam.MixinOptions",
+    "freecam.MixinMultiPlayerGameMode",
+    "freecam.MixinMinecraft",
+    "freecam.MixinClientPacketListener",
+    "freecam.MixinGui"
   ],
   "mixins": [
   ],

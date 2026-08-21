@@ -19,9 +19,10 @@ public class ProfileManager {
     public static void init() {
         loadAll();
         loadActiveFromDisk();
-        active.loadModuleSettings(ModuleManager.getAll());
 
-        // Always ensure at least a default profile exists
+        // Always ensure at least a default profile exists — this must happen
+        // BEFORE we dereference `active` below, since on a fresh install
+        // there's no settings.json/profile on disk yet and `active` is null.
         if (profiles.isEmpty()) {
             Profile def = new Profile("default", ThemePresets.sharp());
             profiles.add(def);
@@ -31,6 +32,8 @@ public class ProfileManager {
         if (active == null) {
             active = profiles.get(0);
         }
+
+        active.loadModuleSettings(ModuleManager.getAll());
 
         saveSettings();
     }
