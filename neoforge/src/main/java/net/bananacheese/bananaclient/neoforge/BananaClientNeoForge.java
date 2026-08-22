@@ -2,6 +2,8 @@ package net.bananacheese.bananaclient.neoforge;
 
 import net.bananacheese.bananaclient.BananaClient;
 import net.bananacheese.bananaclient.hud.HudRenderer;
+import net.bananacheese.bananaclient.modules.combat.Criticals;
+import net.bananacheese.bananaclient.modules.movement.Velocity;
 import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -21,7 +23,11 @@ public class BananaClientNeoForge {
         NeoForge.EVENT_BUS.addListener((RenderGuiEvent.Post event) ->
                 HudRenderer.onRenderHud(event.getGuiGraphics()));
 
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) ->
-                Freecam.onClientTick(Minecraft.getInstance()));
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            Minecraft mc = Minecraft.getInstance();
+            Freecam.onClientTick(mc);
+            Criticals.onClientTick(mc);
+            Velocity.onClientTick(mc);
+        });
     }
 }

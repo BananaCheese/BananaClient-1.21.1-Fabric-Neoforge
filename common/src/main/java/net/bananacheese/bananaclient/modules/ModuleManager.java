@@ -1,10 +1,12 @@
 package net.bananacheese.bananaclient.modules;
 
 import net.bananacheese.bananaclient.gui.profile.ProfileManager;
+import net.bananacheese.bananaclient.modules.combat.Criticals;
 import net.bananacheese.bananaclient.modules.player.Reach;
 import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.bananacheese.bananaclient.modules.render.Fullbright;
 import net.bananacheese.bananaclient.modules.movement.NoFall;
+import net.bananacheese.bananaclient.modules.movement.Velocity;
 import net.bananacheese.bananaclient.modules.render.Coordinates;
 
 import java.util.ArrayList;
@@ -20,12 +22,14 @@ public class ModuleManager {
         initialized = true;
 
         //Combat
+        register(new Criticals());
 
         //Player
         register(new Reach());
 
         // Movement
         register(new NoFall());
+        register(new Velocity());
 
         // Render
         register(new Coordinates());
@@ -33,7 +37,7 @@ public class ModuleManager {
         register(new Freecam());
 
         // Misc
-        
+
     }
 
     // Called by BananaClient.init() after ProfileManager is ready
