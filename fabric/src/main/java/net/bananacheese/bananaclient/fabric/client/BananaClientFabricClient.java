@@ -1,18 +1,22 @@
 package net.bananacheese.bananaclient.fabric.client;
 
-import dev.architectury.event.events.client.ClientGuiEvent;
 import net.bananacheese.bananaclient.BananaClient;
-
 import net.bananacheese.bananaclient.hud.HudRenderer;
+import net.bananacheese.bananaclient.modules.render.Freecam;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 
 public class BananaClientFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
         BananaClient.init();
-        ClientGuiEvent.RENDER_HUD.register((gfx, tickDelta) -> {
-            HudRenderer.onRenderHud(gfx);
+
+        HudRenderCallback.EVENT.register((guiGraphics, tickDelta) -> {
+            HudRenderer.onRenderHud(guiGraphics);
         });
+
+        ClientTickEvents.END_CLIENT_TICK.register(Freecam::onClientTick);
     }
 }
