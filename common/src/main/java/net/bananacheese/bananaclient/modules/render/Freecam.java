@@ -35,7 +35,7 @@ public class Freecam extends Module {
 
     private final ModuleSetting<Boolean> returnOnDamage = addSetting(
             new ModuleSetting<>("Return on Damage",
-                    "Disable freecam when taking damage", false)
+                    "Disable freecam when taking damage", true)
     );
 
     private final ModuleSetting<Boolean> returnOnDeath = addSetting(
@@ -60,12 +60,12 @@ public class Freecam extends Module {
 
     private final ModuleSetting<Boolean> staticView = addSetting(
             new ModuleSetting<>("Static View",
-                    "Disables FOV effects and view bobbing", true)
+                    "Disables FOV effects and view bobbing", false)
     );
 
     private final ModuleSetting<Boolean> freezePlayer = addSetting(
             new ModuleSetting<>("Freeze Player",
-                    "Keeps your real body from moving/falling while freecam is active", true)
+                    "Keeps your real body from moving/falling while freecam is active", false)
     );
 
     private final ModuleSetting<Boolean> allowInteractions = addSetting(
@@ -79,13 +79,6 @@ public class Freecam extends Module {
     private CameraType savedPerspective;
     private double savedFovScale;
     private boolean savedBobView;
-
-    // Freeze-in-place bookkeeping (see onClientTick). We snapshot the real
-    // player's position the moment Freeze Player becomes active (either at
-    // freecam-enable time, or whenever the setting gets flipped on mid-session)
-    // and re-pin them there every tick, rather than fighting the player
-    // entity's own tick logic by cancelling its low-level movement calls
-    // (that approach caused a stuck-jump-loop glitch when toggled mid-air).
     private boolean playerFrozen = false;
     private Vec3 frozenPos = Vec3.ZERO;
 
