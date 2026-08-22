@@ -20,7 +20,8 @@
     ]
   },
   "mixins": [
-    "bananaclient.mixins.json"
+    "bananaclient.mixins.json",
+    "bananaclient.fabric.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.19.2",

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "net.bananacheese.bananaclient.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": [
+    "MixinLevelRenderer"
+  ],
+  "mixins": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
